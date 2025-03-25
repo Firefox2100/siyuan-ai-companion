@@ -64,3 +64,27 @@ class Notebook:
                 note.load()
 
                 self._notes.append(note)
+
+    @classmethod
+    def list_notebooks(cls) -> list['Notebook']:
+        """
+        List all notebooks in the data directory
+
+        By default, they are not loaded
+
+        :return: A list of notebooks
+        """
+        notebooks = []
+
+        notebook_pattern = r'^\d{14}-[a-zA-Z0-9]{7}$'
+
+        for folder_name in os.listdir(SIYUAN_DATA_DIR):
+            if os.path.isdir(os.path.join(SIYUAN_DATA_DIR, folder_name)) \
+                and re.match(notebook_pattern, folder_name):
+                notebook = Notebook(
+                    notebook_id=folder_name,
+                )
+
+                notebooks.append(notebook)
+
+        return notebooks
