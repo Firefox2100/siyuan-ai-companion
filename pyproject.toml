@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "siyuan-ai-companion"
+authors = [
+    { name="Firefox2100", email="wangyunze16@gmail.com" },
+]
+description = "A companion application to use SiYuan note as a knowledge base with OpenAI APIs"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+license = {file = "LICENSE"}
+dependencies = [
+    "qdrant-client~=1.13.3",
+    "quart~=0.20.0",
+    "sentence-transformers~=3.4.1",
+]
+dynamic = [
+    "version"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest~=8.3.4",
+    "coverage~=7.6.10",
+    "pytest-asyncio~=0.25.2",
+    "pytest-cov~=6.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Firefox2100/siyuan-ai-companion"
+Repository = "https://github.com/Firefox2100/siyuan-ai-companion.git"
+Issues = "https://github.com/Firefox2100/siyuan-ai-companion/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "siyuan_ai_companion.__version__"}
