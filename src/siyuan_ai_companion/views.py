@@ -1,5 +1,5 @@
 from urllib.parse import urljoin
-from quart import Blueprint, request, jsonify
+from quart import Blueprint, Response, request, jsonify
 import httpx
 
 from siyuan_ai_companion.consts import OPENAI_URL
@@ -10,19 +10,35 @@ v1_blueprint = Blueprint('v1', __name__)
 
 
 async def forward_request(url, payload, method='POST'):
-    async with httpx.AsyncClient() as client:
-        response = await client.request(
-            method=method,
-            url=url,
-            json=payload if method == 'POST' else None,
-            headers={
-                "Authorization": request.headers.get("Authorization", ""),
-                "Content-Type": "application/json",
-            },
-            timeout=30.0,
-        )
+    headers = {
+        "Authorization": request.headers.get("Authorization", ""),
+        "Content-Type": "application/json",
+    }
 
-    return response.text, response.status_code, response.headers.items()
+    # Detect if client wants a streamed response
+    stream = False
+    if method == 'POST' and isinstance(payload, dict):
+        stream = payload.get("stream", False)
+
+    if stream:
+        async def async_stream():
+            async with httpx.AsyncClient(timeout=None) as client:
+                async with client.stream(method, url, json=payload, headers=headers) as response:
+                    async for chunk in response.aiter_bytes():
+                        yield chunk
+
+        return Response(async_stream(), content_type='text/event-stream')
+    else:
+        async with httpx.AsyncClient() as client:
+            response = await client.request(
+                method=method,
+                url=url,
+                json=payload if method == 'POST' else None,
+                headers=headers,
+                timeout=30.0,
+            )
+
+        return response.text, response.status_code, response.headers.items()
 
 
 @v1_blueprint.route('/chat/completions', methods=['POST'])
