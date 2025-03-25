@@ -9,3 +9,7 @@ QDRANT_COLLECTION_NAME = os.getenv(
     'QDRANT_COLLECTION_NAME',
     'siyuan_ai_companion'
 )
+OPENAI_URL = os.getenv(
+    'OPENAI_URL',
+    'https://api.openai.com/v1/'
+)

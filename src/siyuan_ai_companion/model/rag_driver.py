@@ -108,3 +108,37 @@ class RagDriver:
             })
 
         return results
+
+    def build_prompt(self,
+                     query: str,
+                     limit: int = 5,
+                     ) -> str:
+        """
+        Construct the prompt using the search results
+
+        This prompt is used to generate the completion
+        with the user message
+
+        :param query: The user message
+        :param limit: The number of search results to use
+        :return: The prompt, added with the search results
+        """
+        search_results = self.search(
+            query=query,
+            limit=limit,
+        )
+
+        if not search_results:
+            return query
+
+        prompt = 'Here are some documents that may help answer the question:\n\n'
+
+        for i, result in enumerate(search_results):
+            prompt += f'Document {i + 1}:\n'
+            prompt += result['noteContent']
+            prompt += '\n\n'
+
+        prompt += 'Answer the following question based on the documents above and your own knowledge:\n'
+        prompt += query
+
+        return prompt
