@@ -20,6 +20,7 @@ classifiers = [
 ]
 license = {file = "LICENSE"}
 dependencies = [
+    "apscheduler~=3.11.0",
     "httpx~=0.28.1",
     "qdrant-client~=1.13.3",
     "quart~=0.20.0",

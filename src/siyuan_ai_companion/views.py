@@ -56,7 +56,7 @@ async def chat_completion():
 
     rag_driver = RagDriver()
 
-    new_prompt = rag_driver.build_prompt(query=user_message)
+    new_prompt = await rag_driver.build_prompt(query=user_message)
 
     # Inject the RAG-generated prompt into the user message
     for message in request_payload['messages']:
@@ -77,7 +77,7 @@ async def completions():
         return jsonify({'error': 'No prompt provided'}), 400
 
     rag_driver = RagDriver()
-    new_prompt = rag_driver.build_prompt(query=prompt)
+    new_prompt = await rag_driver.build_prompt(query=prompt)
     request_payload["prompt"] = new_prompt
 
     target_url = urljoin(OPENAI_URL, '/completions')

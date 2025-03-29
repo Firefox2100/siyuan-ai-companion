@@ -1,9 +1,11 @@
 import hashlib
+import asyncio
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 
 from siyuan_ai_companion.consts import QDRANT_COLLECTION_NAME
+from .siyuan_api import SiyuanApi
 
 
 class RagDriver:
@@ -60,6 +62,38 @@ class RagDriver:
             points=[point],
         )
 
+    def add_blocks(self,
+                         blocks: list[tuple[str, str]],
+                         ):
+        """
+        Add multiple blocks to the vector index
+
+        :param blocks: A list of tuples, each containing the ID
+                       of the block and its content
+        """
+        points = []
+
+        for block_id, block_content in blocks:
+            vector = self.transformer.encode(
+                sentences=block_content,
+                normalize_embeddings=True,
+            ).tolist()
+
+            point = PointStruct(
+                id=self._hash_id(block_id),
+                vector=vector,
+                payload={
+                    'blockId': block_id,
+                }
+            )
+
+            points.append(point)
+
+        self.client.upsert(
+            collection_name=QDRANT_COLLECTION_NAME,
+            points=points,
+        )
+
     def update_block(self,
                      block_id: str,
                      block_content: str,
@@ -77,6 +111,22 @@ class RagDriver:
         self.add_block(
             block_id=block_id,
             block_content=block_content
+        )
+
+    def update_blocks(self,
+                      blocks: list[tuple[str, str]],
+                      ):
+        """
+        Update multiple blocks in the vector index
+
+        For now this uses the same upsert method as add_block,
+        which will replace the existing index
+        :param blocks: A list of tuples, each containing the ID
+                       of the block and its content
+        :return: None
+        """
+        self.add_blocks(
+            blocks=blocks,
         )
 
     def delete_block(self,
@@ -142,10 +192,10 @@ class RagDriver:
 
         return results
 
-    def build_prompt(self,
-                     query: str,
-                     limit: int = 5,
-                     ) -> str:
+    async def build_prompt(self,
+                           query: str,
+                           limit: int = 5,
+                           ) -> str:
         """
         Construct the prompt using the search results
 
@@ -164,12 +214,22 @@ class RagDriver:
         if not search_results:
             return query
 
+        block_ids = set(
+            result['blockId']
+            for result in search_results
+        )
+        async with SiyuanApi() as siyuan:
+            tasks = [
+                siyuan.get_note_plaintext(note_id=block_id)
+                for block_id in block_ids
+            ]
+
+            notes = await asyncio.gather(*tasks)
+
         prompt = 'Here are some documents that may help answer the question:\n\n'
 
-        for i, result in enumerate(search_results):
-            prompt += f'Document {i + 1}:\n'
-            prompt += result['noteContent']
-            prompt += '\n\n'
+        for note in notes:
+            prompt += f'{note}\n\n'
 
         prompt += 'Answer the following question based on the documents above and your own knowledge:\n'
         prompt += query
