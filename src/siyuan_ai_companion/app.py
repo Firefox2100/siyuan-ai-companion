@@ -1,8 +1,8 @@
 from quart import Quart
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from .tasks import update_index
-from .views import v1_blueprint
+from siyuan_ai_companion.tasks import update_index
+from siyuan_ai_companion.views import v1_blueprint
 
 
 def create_app():
@@ -13,7 +13,14 @@ def create_app():
     # Initialize the scheduler
     scheduler = AsyncIOScheduler()
     scheduler.add_job(update_index, 'interval', minutes=5)
-    scheduler.start()
+
+    @quart_app.before_serving
+    async def startup():
+        # Start the scheduler when the app starts
+        scheduler.start()
+
+        # Run the task immediately
+        await update_index()
 
     return quart_app
 

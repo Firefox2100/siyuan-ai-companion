@@ -4,7 +4,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 
-from siyuan_ai_companion.consts import QDRANT_COLLECTION_NAME
+from siyuan_ai_companion.consts import QDRANT_COLLECTION_NAME, QDRANT_LOCATION
 from .siyuan_api import SiyuanApi
 
 
@@ -17,7 +17,9 @@ class RagDriver:
             RagDriver.transformer = SentenceTransformer('all-MiniLM-L6-v2')
 
         if RagDriver.client is None:
-            RagDriver.client = QdrantClient()
+            RagDriver.client = QdrantClient(
+                location=QDRANT_LOCATION,
+            )
 
         if not RagDriver.client.collection_exists(QDRANT_COLLECTION_NAME):
             RagDriver.client.create_collection(
