@@ -173,5 +173,5 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Test data
-/data/
+# Runtime cache
+last_update

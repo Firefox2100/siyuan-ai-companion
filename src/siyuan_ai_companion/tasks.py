@@ -8,7 +8,7 @@ async def update_index():
     Update the vector index with new blocks
     """
     try:
-        with open('last_update', 'r') as f:
+        with open('last_update') as f:
             last_update = int(f.read())
     except FileNotFoundError:
         last_update = 0

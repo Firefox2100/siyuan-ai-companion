@@ -24,4 +24,9 @@ OPENAI_URL = os.getenv(
 )
 
 LOGGER = logging.getLogger('siyuan-ai-companion')
+LOGGER.setLevel(logging.INFO)
 
+FORCE_UPDATE_INDEX = os.getenv(
+    'FORCE_UPDATE_INDEX',
+    'false'
+).lower() == 'true'
