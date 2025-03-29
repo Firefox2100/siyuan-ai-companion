@@ -1,6 +1,6 @@
 # SiYuan AI Companion
 
-A companion application to use SiYuan note as a knowledge base with OpenAI APIs.
+A companion service to use SiYuan note as a knowledge base with OpenAI APIs.
 
 ## License and disclaimer
 
