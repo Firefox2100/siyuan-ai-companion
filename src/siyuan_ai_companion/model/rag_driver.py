@@ -30,21 +30,28 @@ class RagDriver:
     def _hash_id(note_id: str) -> int:
         return int.from_bytes(hashlib.md5(note_id.encode()).digest()[:8], "big")
 
-    def add_note(self,
-                 note_id: str,
-                 note_content: str,
-                 ):
+    def add_block(self,
+                  block_id: str,
+                  block_content: str,
+                  ):
+        """
+        Add a block to the vector index
+
+        :param block_id: The ID of the block, used in SiYuan
+        :param block_content: The content of the block, plain text
+                              with markdown stripped
+        :return: None
+        """
         vector = self.transformer.encode(
-            sentences=note_content,
+            sentences=block_content,
             normalize_embeddings=True,
         ).tolist()
 
         point = PointStruct(
-            id=self._hash_id(note_id),
+            id=self._hash_id(block_id),
             vector=vector,
             payload={
-                'noteId': note_id,
-                'noteContent': note_content,
+                'blockId': block_id,
             }
         )
 
@@ -53,24 +60,43 @@ class RagDriver:
             points=[point],
         )
 
-    def update_note(self,
-                    note_id: str,
-                    note_content: str,
-                    ):
-        self.add_note(
-            note_id=note_id,
-            note_content=note_content
+    def update_block(self,
+                     block_id: str,
+                     block_content: str,
+                     ):
+        """
+        Update a block in the vector index
+
+        For now this uses the same upsert method as add_block,
+        which will replace the existing index
+        :param block_id: The ID of the block, used in SiYuan
+        :param block_content: The content of the block, plain text
+                              with markdown stripped
+        :return: None
+        """
+        self.add_block(
+            block_id=block_id,
+            block_content=block_content
         )
 
-    def delete_note(self,
-                    note_id: str,
-                    ):
+    def delete_block(self,
+                     block_id: str,
+                     ):
+        """
+        Delete a block from the vector index
+
+        :param block_id: The ID of the block, used in SiYuan
+        :return: None
+        """
         self.client.delete(
             collection_name=QDRANT_COLLECTION_NAME,
-            points_selector={'points': [self._hash_id(note_id)]},
+            points_selector={'points': [self._hash_id(block_id)]},
         )
 
     def delete_all(self):
+        """
+        Delete all blocks from the vector index
+        """
         self.client.delete_collection(
             collection_name=QDRANT_COLLECTION_NAME,
         )
@@ -87,6 +113,14 @@ class RagDriver:
                query: str,
                limit: int = 5,
                ) -> list[dict]:
+        """
+        Search for the most relevant blocks in the vector index
+
+        :param query: The user message, in plain text
+        :param limit: The number of results to return
+        :return: A list of the most relevant blocks, with their IDs
+                 and scores
+        """
         query_vector = self.transformer.encode(
             sentences=query,
             normalize_embeddings=True,
@@ -102,8 +136,7 @@ class RagDriver:
 
         for hit in hits.points:
             results.append({
-                'noteId': hit.payload['noteId'],
-                'noteContent': hit.payload['noteContent'],
+                'blockId': hit.payload['blockId'],
                 'score': hit.score,
             })
 
