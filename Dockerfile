@@ -1,8 +1,8 @@
-FROM python:3.10-alpine
+FROM python:3.10-slim
 
 # Install curl and other dependencies
-RUN apk --no-cache add curl bash gcc musl-dev linux-headers \
-&& addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN apk --no-cache add curl bash gcc g++ musl-dev linux-headers \
+    && addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -20,8 +20,8 @@ RUN chown appuser:appgroup /app
 COPY . /app/siyuan-ai-companion
 
 RUN pip install /app/siyuan-ai-companion \
-&& pip install hypercorn \
-&& chown -R appuser:appgroup /app
+    && pip install hypercorn \
+    && chown -R appuser:appgroup /app
 
 # Switch to the non-root user
 USER appuser
