@@ -24,7 +24,9 @@ RUN chown appuser:appgroup /app
 # Copy source code and configuration files, then change ownership
 COPY . /app/siyuan-ai-companion
 
-RUN python -m pip install /app/siyuan-ai-companion[hypercorn] \
+RUN python -m pip install --no-cache-dir \
+  torch --index-url https://download.pytorch.org/whl/cpu && \
+    python -m pip install --no-cache-dir /app/siyuan-ai-companion[hypercorn] \
     && chown -R appuser:appgroup /app
 
 # Switch to the non-root user
