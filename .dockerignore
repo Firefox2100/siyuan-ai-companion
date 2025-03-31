@@ -1,0 +1,79 @@
+# Python cache & build artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
+.eggs/
+*.manifest
+*.spec
+*.pyd
+*.pyo
+*.dll
+
+# Virtual environments
+env/
+ENV/
+env.bak/
+venv/
+venv.bak/
+.venv/
+.env/
+.python-version
+.pdm-python
+
+# Package manager & tool caches
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.dmypy.json
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+target/
+.pybuilder/
+
+# IDE/editor configs
+.idea/
+.vscode/
+*.swp
+.spyderproject
+.spyproject
+.ropeproject
+
+# Docs & notebooks
+docs/_build/
+.ipynb_checkpoints/
+site/
+
+# Logs & runtime artifacts
+*.log
+*.pot
+*.mo
+celerybeat-schedule
+celerybeat.pid
+last_update
+
+# Git & GitHub
+.git/
+.gitignore
+.github/
+
+# Tests & dev-only resources
+test/
+tests/
+schema.sql
+
+# Ignore project-specific files
+.Python
+.pdm.toml
+.pdm-build/
+instance/
+.webassets-cache
+downloads/

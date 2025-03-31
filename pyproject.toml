@@ -37,6 +37,9 @@ test = [
     "pytest-asyncio~=0.25.2",
     "pytest-cov~=6.0.0",
 ]
+hypercorn = [
+    "hypercorn~=0.17.3",
+]
 
 [project.urls]
 Homepage = "https://github.com/Firefox2100/siyuan-ai-companion"
