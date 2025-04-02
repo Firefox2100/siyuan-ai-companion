@@ -1,3 +1,10 @@
+"""
+RAG driver handles document embedding, vector storage,
+retrival and prompt construction for the RAG model. It
+also uses the SiyuanApi directly to get the full content
+of the notes.
+"""
+
 import hashlib
 import asyncio
 from qdrant_client import QdrantClient
@@ -9,6 +16,9 @@ from .siyuan_api import SiyuanApi
 
 
 class RagDriver:
+    """
+    The RAG driver for the vector index
+    """
     transformer: SentenceTransformer = None
     client: QdrantClient = None
 
@@ -229,11 +239,9 @@ class RagDriver:
             notes = await asyncio.gather(*tasks)
 
         prompt = 'Here are some documents that may help answer the question:\n\n'
-
-        for note in notes:
-            prompt += f'{note}\n\n'
-
-        prompt += 'Answer the following question based on the documents above and your own knowledge:\n'
+        prompt += '\n\n'.join(notes)
+        prompt += ('Answer the following question based on the'
+                   'documents above and your own knowledge:\n\n')
         prompt += query
 
         return prompt

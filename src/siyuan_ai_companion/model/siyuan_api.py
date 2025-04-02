@@ -1,3 +1,9 @@
+"""
+SiYuan API client
+
+It handles the communication with the SiYuan server, querying
+blocks, tracking updates and retrieving notes.
+"""
 from collections import defaultdict
 from datetime import datetime
 from httpx import AsyncClient
@@ -30,9 +36,9 @@ class SiyuanApi:
         self.token = token or SIYUAN_TOKEN
 
         headers = None
-        if token is not None:
+        if self.token is not None:
             headers = {
-                'Authorization': f'Token {token}'
+                'Authorization': f'Token {self.token}'
             }
 
         self._client = client if client is not None else AsyncClient(

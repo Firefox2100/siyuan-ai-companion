@@ -80,7 +80,7 @@ async def completions():
     new_prompt = await rag_driver.build_prompt(query=prompt)
     request_payload["prompt"] = new_prompt
 
-    target_url = urljoin(OPENAI_URL, '/completions')
+    target_url = urljoin(OPENAI_URL, 'completions')
     return await forward_request(target_url, request_payload)
 
 
