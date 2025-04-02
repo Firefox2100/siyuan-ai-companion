@@ -1,0 +1,69 @@
+name: Code Analysis with SonarQube
+
+permissions:
+  checks: write
+  pull-requests: write
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+      types: [opened, synchronize, reopened]
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install .[test]
+
+    - name: Run tests with coverage
+      continue-on-error: true
+      run: |
+        export PYTHONPATH=./src:$PYTHONPATH
+        pytest --junitxml=test-results.xml --cov=siyuan_ai_companion --cov-report=xml --cov-report=html
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: test-results.xml
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage.xml
+
+    - name: Extract Version
+      run: |
+        VERSION=$(awk -F'"' '/^__version__/ {print $2}' ./src/siyuan_ai_companion/__init__.py)
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v5
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        args: >
+          -Dsonar.projectVersion=${{ env.VERSION }}
+
+    - name: Publish test results
+      uses: mikepenz/action-junit-report@v5
+      if: always()
+      with:
+        report_paths: "test-results.xml"
