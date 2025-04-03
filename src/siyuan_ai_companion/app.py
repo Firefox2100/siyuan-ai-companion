@@ -4,13 +4,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from siyuan_ai_companion.consts import FORCE_UPDATE_INDEX
 from siyuan_ai_companion.tasks import update_index
-from siyuan_ai_companion.views import v1_blueprint
+from siyuan_ai_companion.views import openai_blueprint
 
 
 def create_app():
     quart_app = Quart(__name__)
 
-    quart_app.register_blueprint(v1_blueprint, url_prefix='/v1')
+    quart_app.register_blueprint(openai_blueprint, url_prefix='/openai')
 
     # Initialize the scheduler
     scheduler = AsyncIOScheduler()

@@ -16,6 +16,8 @@ ENV SIYUAN_URL="http://siyuan:6806"
 ENV QDRANT_LOCATION="qdrant:6333"
 ENV QDRANT_COLLECTION_NAME="siyuan_ai_companion"
 ENV OPENAI_URL="https://api.openai.com/v1/"
+ENV HYPERCORN_HOST="0.0.0.0"
+ENV HYPERCORN_PORT=8000
 
 # Set the working directory and change ownership to the non-root user
 WORKDIR /app
@@ -36,7 +38,8 @@ USER appuser
 EXPOSE 8000
 
 # Run the application
-CMD ["hypercorn", "siyuan_ai_companion.asgi:application"]
+CMD ["/app/siyuan-ai-companion/scripts/docker-entry.sh"]
 
 # Healthcheck
-HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 CMD curl -f http://localhost:8000/health || exit 1
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
+  CMD ["sh", "/app/siyuan-ai-companion/scripts/healthcheck.sh"]
