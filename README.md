@@ -104,13 +104,13 @@ configs:
 
 The application uses environment variables to configure the connection to SiYuan and Qdrant. The following environment variables are used:
 
-- SIYUAN_URL: The URL of the SiYuan instance. This is required to read the data from SiYuan. It should be a URL with protocol, e.g. `http://localhost:6806`.
-- SIYUAN_TOKEN: The token to access the SiYuan API. This is required to read the data from SiYuan. This is NOT the docker auth code, but the one you see within the setting page.
-- QDRANT_LOCATION: The URL of the Qdrant instance. This is required to store the embeddings. If using in-memory Qdrant, this can be set to `:memory:`.
-- QDRANT_COLLECTION_NAME: The name of the collection to use in Qdrant. This is required to store the embeddings. If the collection does not exist, it will be created automatically.
-- OPENAI_URL: The URL of the OpenAI compatible API. This does not need to be reachable from the outside. So if you host your own LLM service, you can set this to a local address, or even a docker network address. As long as it's reachable from the container.
-- FORCE_UPDATE_INDEX: Set this to `true` to force the companion to rebuild the index everytime it restarts. This is useful for development or recovering from a corrupted index.
+- **SIYUAN_URL**: The URL of the SiYuan instance. This is required to read the data from SiYuan. It should be a URL with protocol, e.g. `http://localhost:6806`.
+- **SIYUAN_TOKEN**: The token to access the SiYuan API. This is required to read the data from SiYuan. This is NOT the docker auth code, but the one you see within the setting page.
+- **QDRANT_LOCATION**: The URL of the Qdrant instance. This is required to store the embeddings. If using in-memory Qdrant, this can be set to `:memory:`.
+- **QDRANT_COLLECTION_NAME**: The name of the collection to use in Qdrant. This is required to store the embeddings. If the collection does not exist, it will be created automatically.
+- **OPENAI_URL**: The URL of the OpenAI compatible API. This does not need to be reachable from the outside. So if you host your own LLM service, you can set this to a local address, or even a docker network address. As long as it's reachable from the container.
+- **FORCE_UPDATE_INDEX**: Set this to `true` to force the companion to rebuild the index everytime it restarts. This is useful for development, recovering from a corrupted index, or if the vector index is not persistent in the database.
 
-All requests sent to the API are passed to the OpenAI compatible API, with all original headers. This service does not check whether your request format is correct, have the right headers, or anything related to the API, except for the prompt field.
+All requests sent to the API are passed to the OpenAI compatible API, with all original headers. This service does not check whether your request format is correct, have the right headers or anything related to the API, except for the prompt field.
 
 This service uses only `SELECT` queries and only the SQL endpoint. In theory, it should not affect the note data or damage it in any way. However, it is recommended to backup your data before using this service, just in case. If unforeseen errors occur, it may send more than one request to the OpenAI API, which may incur additional costs; if possible, use a separate API key when using this service, one that is rate limited or have a low spending cost.

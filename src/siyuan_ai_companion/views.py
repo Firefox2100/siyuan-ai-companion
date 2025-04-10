@@ -2,11 +2,13 @@
 Blueprint definition for OpenAI compatible API endpoints.
 """
 
+from functools import wraps
+from copy import deepcopy
 from urllib.parse import urljoin
 from quart import Blueprint, Response, request, jsonify
 import httpx
 
-from siyuan_ai_companion.consts import OPENAI_URL
+from siyuan_ai_companion.consts import OPENAI_URL, COMPANION_TOKEN
 from siyuan_ai_companion.model import RagDriver
 
 
@@ -28,15 +30,11 @@ async def forward_request(url: str,
              it returns a Response object for streaming. Otherwise it unpacks the
              response into Quart handler response format.
     """
-    headers = {
-        'Authorization': request.headers.get('Authorization', ''),
-        'Content-Type': 'application/json',
-        'User-Agent': request.headers.get('User-Agent', 'SiYuanApiCompanion/1.0'),
-        'Accept': request.headers.get('Accept', 'application/json'),
-        'Host': request.headers.get('Host', ''),
-    }
+    headers = deepcopy(request.headers)
+    # Remove the 'X-Companion-Token' header to avoid exposing to other services
+    headers.pop('X-Companion-Token', None)
 
-    # Detect if client wants a streamed response
+    # Detect if the client wants a streamed response
     stream = False
     if method == 'POST' and isinstance(payload, dict):
         stream = payload.get("stream", False)
@@ -62,7 +60,30 @@ async def forward_request(url: str,
     return response.text, response.status_code, response.headers.items()
 
 
+def token_required(f):
+    """
+    A wrapper function to validate the token sent with the request
+    """
+    @wraps(f)
+    async def decorated(*args, **kwargs):
+        if COMPANION_TOKEN is None:
+            # No token set, authentication disabled
+            return await f(*args, **kwargs)
+
+        token_header = request.headers.get('X-Companion-Token', None)
+        if not token_header:
+            return jsonify({'error': 'X-Companion-Token header is missing'}), 401
+
+        if token_header != COMPANION_TOKEN:
+            return jsonify({'error': 'Invalid companion token'}), 401
+
+        return await f(*args, **kwargs)
+
+    return decorated
+
+
 @openai_blueprint.route('/v1/chat/completions', methods=['POST'])
+@token_required
 async def v1_chat_completion():
     """
     Handles the /v1/chat/completions endpoint.
@@ -95,6 +116,7 @@ async def v1_chat_completion():
 
 
 @openai_blueprint.route('/v1/completions', methods=['POST'])
+@token_required
 async def v1_completions():
     """
     Handles the /v1/completions endpoint.
@@ -117,11 +139,12 @@ async def v1_completions():
 
 
 @openai_blueprint.route('/v1/embeddings', methods=['POST'])
+@token_required
 async def v1_embeddings():
     """
     Handles the /v1/embeddings endpoint.
 
-    This uses the model embedding directly. No prompt injected
+    This uses the model embedding directly. No prompts injected
     """
     request_payload = await request.get_json()
     target_url = urljoin(OPENAI_URL, '/embeddings')
@@ -129,6 +152,7 @@ async def v1_embeddings():
 
 
 @openai_blueprint.route('/models', methods=['GET'])
+@token_required
 async def v1_models():
     """
     Handles the /models endpoint.

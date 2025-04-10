@@ -4,6 +4,9 @@ SiYuan API client
 It handles the communication with the SiYuan server, querying
 blocks, tracking updates and retrieving notes.
 """
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+from tempfile import NamedTemporaryFile
 from collections import defaultdict
 from datetime import datetime
 from httpx import AsyncClient
@@ -228,3 +231,37 @@ class SiyuanApi:
         content = '\n'.join(content_lines)
 
         return content
+
+    @asynccontextmanager
+    async def download_asset(self,
+                             asset_path: str,
+                             ) -> AsyncIterator[NamedTemporaryFile]:
+        """
+        Download an asset from the SiYuan server
+        and store it as a temporary file
+        :param asset_path: The asset relative path to '/data/assets'
+        :return: The file like object of the downloaded asset
+        """
+        response = await self._client.post(
+            url='/api/file/getFile',
+            json={
+                'path': f'/data/assets/{asset_path}',
+            }
+        )
+
+        if response.status_code != 200:
+            raise SiYuanApiError(
+                message='Failed to download asset',
+                status_code=response.status_code,
+            )
+
+        content_type = response.headers.get('Content-Type', '')
+        suffix = "." + content_type.split("/")[-1]
+
+        with NamedTemporaryFile(
+            suffix=suffix,
+        ) as temp_file:
+            temp_file.write(response.content)
+            temp_file.flush()
+
+            yield temp_file

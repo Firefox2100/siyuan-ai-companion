@@ -21,7 +21,9 @@ classifiers = [
 license = {file = "LICENSE"}
 dependencies = [
     "apscheduler~=3.11.0",
+    "faster-whisper~=1.1.1",
     "httpx~=0.28.1",
+    "pyannote.audio~=3.3.2",
     "qdrant-client~=1.13.3",
     "quart~=0.20.0",
     "sentence-transformers~=3.4.1",
