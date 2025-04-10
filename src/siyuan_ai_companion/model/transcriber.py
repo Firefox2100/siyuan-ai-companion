@@ -3,19 +3,43 @@ A functional class to transcribe audio files
 """
 
 import os
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
 from faster_whisper import WhisperModel
+from faster_whisper.transcribe import Segment
 from pyannote.audio import Pipeline
 
-from siyuan_ai_companion.consts import TRANSCRIBE_KEEP_MODEL, HUGGINGFACE_HUB_TOKEN
+from siyuan_ai_companion.consts import HUGGINGFACE_HUB_TOKEN, WHISPER_WORKERS
 from .siyuan_api import SiyuanApi
+
+
+def _transcribe(audio_path) -> list[Segment]:
+    transcriber = Transcriber()
+    model = transcriber.whisper_model
+
+    segments_iter, _ = model.transcribe(
+        audio_path,
+        language='en',
+    )
+
+    segments = list(segments_iter)
+
+    return segments
+
+
+def _diarise(audio_path):
+    transcriber = Transcriber()
+    pipeline = transcriber.pipeline
+
+    diarisation = pipeline(audio_path)
+
+    return diarisation
 
 
 class Transcriber:
     """
     A functional class to transcribe audio files
     """
-    _whisper_model: WhisperModel | None = None
-    _pipeline = None
 
     @property
     def whisper_model(self) -> WhisperModel:
@@ -23,18 +47,12 @@ class Transcriber:
         Get the whisper model.
         :return: WhisperModel object.
         """
-        if self._whisper_model is None:
-            wm = WhisperModel(
-                'medium',
-                compute_type='int8',
-            )
-
-            if TRANSCRIBE_KEEP_MODEL:
-                Transcriber._whisper_model = wm
-            else:
-                return wm
-
-        return Transcriber._whisper_model
+        wm = WhisperModel(
+            'medium',
+            compute_type='int8_float32',
+            num_workers=WHISPER_WORKERS,
+        )
+        return wm
 
     @property
     def pipeline(self) -> Pipeline:
@@ -42,18 +60,11 @@ class Transcriber:
         Get the diarisation pipeline.
         :return: A Pipeline object.
         """
-        if self._pipeline is None:
-            pipeline = Pipeline.from_pretrained(
-                'pyannote/speaker-diarization',
-                use_auth_token=HUGGINGFACE_HUB_TOKEN,
-            )
-
-            if TRANSCRIBE_KEEP_MODEL:
-                Transcriber._pipeline = pipeline
-            else:
-                return pipeline
-
-        return Transcriber._pipeline
+        pipeline = Pipeline.from_pretrained(
+            'pyannote/speaker-diarization',
+            use_auth_token=HUGGINGFACE_HUB_TOKEN,
+        )
+        return pipeline
 
     async def _transcribe_and_diarise_file(self, audio_path: str) -> list[dict]:
         """
@@ -62,17 +73,15 @@ class Transcriber:
         :return: A list of dictionaries containing the start time, end time,
                  speaker label, and text.
         """
-        # Transcribe
-        model = self.whisper_model
-        segments_iter, _ = model.transcribe(
-            audio_path,
-            language='en',
-        )
-        segments = list(segments_iter)
+        loop = asyncio.get_event_loop()
+        executor = ProcessPoolExecutor(max_workers=2)
 
-        # Diarise
-        pipeline = self.pipeline
-        diarisation = pipeline(audio_path)
+        tasks = [
+            loop.run_in_executor(executor, _transcribe, audio_path),
+            loop.run_in_executor(executor, _diarise, audio_path),
+        ]
+
+        segments, diarisation = await asyncio.gather(*tasks)
 
         # Merge efficiently
         output = []
@@ -108,5 +117,3 @@ class Transcriber:
                 result = self._transcribe_and_diarise_file(
                     audio_path=audio_path,
                 )
-
-

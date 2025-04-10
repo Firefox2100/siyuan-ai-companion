@@ -52,10 +52,10 @@ COMPANION_TOKEN = os.getenv(            # Token to authenticate with this servic
     'COMPANION_TOKEN',
     None
 )
-TRANSCRIBE_KEEP_MODEL = os.getenv(      # Whether to keep the model in-memory between uses
-    'TRANSCRIBE_KEEP_MODEL',
-    'false'
-).lower() == 'true'
+WHISPER_WORKERS = int(os.getenv(        # Number of workers to use for faster-whisper
+    'WHISPER_WORKERS',
+    '1'
+))
 HUGGINGFACE_HUB_TOKEN = os.getenv(      # Hugging Face Hub token for downloading models
     'HUGGINGFACE_HUB_TOKEN',
     None
