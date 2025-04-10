@@ -55,41 +55,46 @@ class Transcriber:
 
         return Transcriber._pipeline
 
-    async def _transcribe_and_diarise_file(self,
-                                           audio_path: str,
-                                           ) -> list[dict]:
+    async def _transcribe_and_diarise_file(self, audio_path: str) -> list[dict]:
         """
         Transcribe and diarise an audio file.
         :param audio_path: The absolute path to the audio file.
         :return: A list of dictionaries containing the start time, end time,
                  speaker label, and text.
         """
+        # Transcribe
         model = self.whisper_model
-        segments, _ = model.transcribe(
+        segments_iter, _ = model.transcribe(
             audio_path,
             language='en',
         )
+        segments = list(segments_iter)
 
-        # Diarise with pyannote.audio
+        # Diarise
         pipeline = self.pipeline
-
         diarisation = pipeline(audio_path)
 
+        # Merge efficiently
         output = []
-        for turn, _, speaker in diarisation.itertracks(yield_label=True):
-            speaker_segments = [
-                (s.start, s.end, s.text)
-                for s in segments
-                if s.start >= turn.start and s.end <= turn.end
-            ]
+        seg_idx = 0
+        num_segments = len(segments)
 
-            for start, end, text in speaker_segments:
-                output.append({
-                    'start': start,
-                    'end': end,
-                    'speaker': speaker,
-                    'text': text,
-                })
+        for turn, _, speaker in diarisation.itertracks(yield_label=True):
+            # Advance to the first segment that might overlap
+            while seg_idx < num_segments and segments[seg_idx].end <= turn.start:
+                seg_idx += 1
+
+            i = seg_idx
+            while i < num_segments and segments[i].start < turn.end:
+                seg = segments[i]
+                if seg.end > turn.start:
+                    output.append({
+                        'start': seg.start,
+                        'end': seg.end,
+                        'speaker': speaker,
+                        'text': seg.text,
+                    })
+                i += 1
 
         return output
 
