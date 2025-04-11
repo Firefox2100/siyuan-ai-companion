@@ -1,5 +1,9 @@
 # SiYuan AI Companion
 
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=bugs)](https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=coverage)](https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion)
+
+[中文简体](README_zh_CN.md)
+
 A companion service to use SiYuan note as a knowledge base with OpenAI APIs.
 
 ## License and disclaimer
