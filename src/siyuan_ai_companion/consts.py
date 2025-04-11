@@ -48,6 +48,10 @@ OPENAI_URL = os.getenv(                 # OpenAI compatible URL to proxy to
     'OPENAI_URL',
     'https://api.openai.com/v1/'
 )
+OPENAI_TOKEN = os.getenv(               # OpenAI API token
+    'OPENAI_TOKEN',
+    None
+)
 COMPANION_TOKEN = os.getenv(            # Token to authenticate with this service
     'COMPANION_TOKEN',
     None
@@ -58,6 +62,13 @@ WHISPER_WORKERS = int(os.getenv(        # Number of workers to use for faster-wh
 ))
 HUGGINGFACE_HUB_TOKEN = os.getenv(      # Hugging Face Hub token for downloading models
     'HUGGINGFACE_HUB_TOKEN',
+    None
+)
+
+
+# Overridable configurations for runtime behavior
+SIYUAN_TRANSCRIBE_NOTEBOOK = os.getenv( # Where to store the transcribed notes
+    'SIYUAN_TRANSCRIBE_NOTEBOOK',
     None
 )
 

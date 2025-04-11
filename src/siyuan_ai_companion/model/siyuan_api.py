@@ -9,7 +9,7 @@ from typing import AsyncIterator
 from tempfile import NamedTemporaryFile
 from collections import defaultdict
 from datetime import datetime
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 
 from siyuan_ai_companion.consts import SIYUAN_URL, SIYUAN_TOKEN
 from siyuan_ai_companion.errors import SiYuanApiError
@@ -67,6 +67,43 @@ class SiyuanApi:
         """
         await self._client.aclose()
 
+    async def _raw_post(self,
+                        url: str,
+                        payload: dict | None = None,
+                        response_is_json: bool = True,
+                        ) -> dict | list | Response:
+        """
+        Execute a raw POST request on the SiYuan server
+        :param url: The URL to post to
+        :param payload: The JSON payload to send
+        :param response_is_json: If the response is JSON format
+        :return: A dictionary if the response is JSON format,
+                 or the raw response
+        :raises: SiYuanApiError
+        """
+        response = await self._client.post(
+            url=url,
+            json=payload,
+        )
+
+        if response.status_code != 200:
+            raise SiYuanApiError(
+                message='Failed to execute SQL query',
+                status_code=response.status_code,
+            )
+
+        if response_is_json:
+            if response.json().get('code') != 0:
+                raise SiYuanApiError(
+                    message=response.json()['msg'],
+                    status_code=response.status_code,
+                )
+
+            data = response.json()
+            return data['data']
+
+        return response
+
     async def _raw_query(self,
                          sql_query: str,
                          ) -> list[dict]:
@@ -76,26 +113,12 @@ class SiyuanApi:
         :param sql_query: The SQL query to execute
         :return: The data response from the SiYuan server
         """
-        response = await self._client.post(
+        return await self._raw_post(
             url='/api/query/sql',
-            json={
+            payload={
                 'stmt': sql_query,
-            }
+            },
         )
-
-        if response.status_code != 200:
-            raise SiYuanApiError(
-                message='Failed to execute SQL query',
-                status_code=response.status_code,
-            )
-        if response.json().get('code') != 0:
-            raise SiYuanApiError(
-                message=response.json()['msg'],
-                status_code=response.status_code,
-            )
-
-        data = response.json()
-        return data['data']
 
     @staticmethod
     def _sort_nodes(nodes: list[dict]) -> list[dict]:
@@ -131,6 +154,41 @@ class SiyuanApi:
             return result
 
         return walk(roots)
+
+    async def _list_files_recursive(self,
+                                    path: str,
+                                    ) -> list[str]:
+        """
+        List all assets in a given path recursively
+        :param path: The path to begin the search
+        :return: All files under the path, including children dirs
+        """
+        if path != '/':
+            path = path.rstrip('/')
+
+        response = await self._raw_post(
+            url='/api/file/readDir',
+            payload={
+                'path': path,
+            }
+        )
+
+        files = []
+
+        for item in response:
+            item_path = f'{path}/{item["name"]}'
+
+            if item['isDir']:
+                # It's a directory, list its contents
+                children = await self._list_files_recursive(
+                    path=item_path,
+                )
+                files.extend(children)
+            else:
+                # It's a file, add it to the list
+                files.append(item_path)
+
+        return files
 
     async def get_count(self) -> int:
         """
@@ -242,18 +300,13 @@ class SiyuanApi:
         :param asset_path: The asset relative path to '/data/assets'
         :return: The file like object of the downloaded asset
         """
-        response = await self._client.post(
+        response = await self._raw_post(
             url='/api/file/getFile',
-            json={
+            payload={
                 'path': f'/data/assets/{asset_path}',
-            }
+            },
+            response_is_json=False,
         )
-
-        if response.status_code != 200:
-            raise SiYuanApiError(
-                message='Failed to download asset',
-                status_code=response.status_code,
-            )
 
         content_type = response.headers.get('Content-Type', '')
         suffix = "." + content_type.split("/")[-1]
@@ -265,3 +318,64 @@ class SiyuanApi:
             temp_file.flush()
 
             yield temp_file
+
+    async def list_assets(self,
+                          suffixes: list[str] = None,
+                          ) -> list[str]:
+        """
+        List all assets in the SiYuan server
+        :param suffixes: A list of file suffixes to filter by
+                         (e.g. ['.mp3', '.wav'])
+        :return: A list of asset paths
+        """
+        assets = await self._list_files_recursive(
+            path='/data/assets',
+        )
+
+        if suffixes is not None:
+            assets = [
+                asset for asset in assets
+                if any(asset.endswith(suffix) for suffix in suffixes)
+            ]
+
+        # Remove the leading '/data/assets/' from the path
+        assets = [asset.replace('/data/assets/', '') for asset in assets]
+
+        return assets
+
+    async def create_note(self,
+                          notebook_id: str,
+                          path: str,
+                          markdown_content: str,
+                          ) -> str:
+        """
+        Create a note in given path from Markdown content
+        :param notebook_id: The ID of the notebook
+        :param path: The `hpath` where the note will be created. The path may
+                     contain spaces, and the last segment of the path will
+                     be the note title.
+        :param markdown_content: The content of the note in Markdown format
+        :return: The ID of newly created note
+        """
+        response = await self._client.post(
+            url='/api/filetree/createDocWithMd',
+            json={
+                'notebook': notebook_id,
+                'path': path,
+                'markdown': markdown_content
+            }
+        )
+
+        if response.status_code != 200:
+            raise SiYuanApiError(
+                message='Failed to create note',
+                status_code=response.status_code,
+            )
+
+        if response.json().get('code') != 0:
+            raise SiYuanApiError(
+                message=response.json()['msg'],
+                status_code=response.status_code,
+            )
+
+        return response.json().get('data')
