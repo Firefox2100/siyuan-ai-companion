@@ -188,11 +188,15 @@ class RagDriver:
             normalize_embeddings=True,
         ).tolist()
 
-        hits = self.client.query_points(
-            collection_name=QDRANT_COLLECTION_NAME,
-            query=query_vector,
-            limit=limit,
-        )
+        try:
+            hits = self.client.query_points(
+                collection_name=QDRANT_COLLECTION_NAME,
+                query=query_vector,
+                limit=limit,
+            )
+        except ValueError:
+            # No results found
+            return []
 
         results = []
 
