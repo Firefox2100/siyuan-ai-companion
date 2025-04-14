@@ -1,5 +1,7 @@
 import os
+import logging
 from quart import Quart
+from quart_cors import cors
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from siyuan_ai_companion.consts import FORCE_UPDATE_INDEX
@@ -7,8 +9,17 @@ from siyuan_ai_companion.tasks import update_index
 from siyuan_ai_companion.views import asset_blueprint, openai_blueprint
 
 
-def create_app():
+def create_app(debug = False):
     quart_app = Quart(__name__)
+
+    if debug:
+        cors(                           # Disable CORS for all routes
+            quart_app,
+            allow_origin="*",
+            allow_headers=["*"],
+            allow_methods=["*"],
+        )
+        quart_app.logger.setLevel(logging.DEBUG)    # Set logging level to DEBUG
 
     quart_app.register_blueprint(asset_blueprint, url_prefix='/assets')
     quart_app.register_blueprint(openai_blueprint, url_prefix='/openai')
@@ -40,5 +51,7 @@ def create_app():
 
 
 if __name__ == '__main__':
-    app = create_app()
+    app = create_app(
+        debug=True
+    )
     app.run()

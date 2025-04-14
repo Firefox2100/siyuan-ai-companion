@@ -27,6 +27,7 @@ dependencies = [
     "pyannote.audio~=3.3.2",
     "qdrant-client~=1.13.3",
     "quart~=0.20.0",
+    "quart-cors~=0.8.0",
     "sentence-transformers~=3.4.1",
 ]
 dynamic = [
