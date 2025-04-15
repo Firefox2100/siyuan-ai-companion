@@ -223,10 +223,26 @@ class Transcriber:
             formatted_output = '\n\n'.join(merged_result)
 
             notebook_id = t_notebook or SIYUAN_TRANSCRIBE_NOTEBOOK
+            audio_block_id = await siyuan.get_audio_block(
+                audio_name=asset_path.split('/')[-1],
+            )
             if notebook_id is None:
-                raise RuntimeError(
-                    'Notebook ID for transcription is not set.'
+                # No notebook specified, insert in the original note
+                formatted_output = '**Transcription**\n\n' + formatted_output
+
+                new_block_id = await siyuan.insert_block(
+                    markdown_content=formatted_output,
+                    previous_id=audio_block_id,
                 )
+
+                await siyuan.set_block_attribute(
+                    block_id=new_block_id,
+                    attributes={
+                        'alias': f'transcription-{audio_block_id}',
+                    },
+                )
+
+                return
 
             base_path = t_base_path or '/'
             if not base_path.endswith('/'):
@@ -235,8 +251,15 @@ class Transcriber:
             title = title or ('Transcription ' +
                               datetime.datetime.now().strftime('%Y%M%D%H%M%S'))
 
-            await siyuan.create_note(
+            note_id = await siyuan.create_note(
                 notebook_id=notebook_id,
                 path=f'{base_path}{title}',
                 markdown_content=formatted_output,
+            )
+
+            await siyuan.set_block_attribute(
+                block_id=note_id,
+                attributes={
+                    'alias': f'transcription-{audio_block_id}',
+                },
             )

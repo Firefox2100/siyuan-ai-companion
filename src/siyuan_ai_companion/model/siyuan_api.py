@@ -4,6 +4,8 @@ SiYuan API client
 It handles the communication with the SiYuan server, querying
 blocks, tracking updates and retrieving notes.
 """
+import re
+from copy import deepcopy
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 from tempfile import NamedTemporaryFile
@@ -71,7 +73,7 @@ class SiyuanApi:
                         url: str,
                         payload: dict | None = None,
                         response_is_json: bool = True,
-                        ) -> dict | list | Response:
+                        ) -> dict | list | str | Response:
         """
         Execute a raw POST request on the SiYuan server
         :param url: The URL to post to
@@ -176,6 +178,11 @@ class SiyuanApi:
         files = []
 
         for item in response:
+            if not isinstance(item, dict):
+                raise SiYuanApiError(
+                    message='Unexpected response type from API',
+                )
+
             item_path = f'{path}/{item["name"]}'
 
             if item['isDir']:
@@ -214,6 +221,104 @@ class SiyuanApi:
         )
 
         return payload[0] if payload else None
+
+    async def get_audio_block(self,
+                              audio_name: str,
+                              ) -> str:
+        """
+        Get an audio block by the file name of the audio asset
+
+        :param audio_name: The file name of the audio asset, as it is
+                           on the file system
+        :return: The audio block ID
+        """
+        payload = await self._raw_query(
+            sql_query=f"SELECT * FROM blocks "
+                      f"WHERE type = 'audio' AND content LIKE '%{audio_name}%'"
+        )
+
+        if not payload:
+            raise SiYuanApiError(
+                message='Audio block not found',
+                status_code=404,
+            )
+
+        # Find the first occasion in case the audio is inserted more than once
+        return payload[0]['id']
+
+    async def get_audio_blocks(self,
+                               audio_names: list[str],
+                               ) -> dict[str, str]:
+        """
+        Get audio blocks by the file names of the audio assets
+        :param audio_names: The file names of the audio assets, as they are
+                            on the file system
+        :return: A dictionary mapping the audio file name to the
+                 audio block ID
+        """
+        audio_names = deepcopy(audio_names)
+        response = await self._raw_query(
+            sql_query="SELECT * FROM blocks WHERE type = 'audio'"
+        )
+
+        audio_blocks = {}
+
+        for block in response:
+            for audio_name in audio_names:
+                if audio_name in block['content']:
+                    audio_blocks[audio_name] = block['id']
+                    audio_names.remove(audio_name)
+
+        return audio_blocks
+
+    async def get_audio_transcription_id(self,
+                                         audio_id: str,
+                                         ) -> str:
+        """
+        Get the block marking the beginning of the transcription for an audio block
+        :param audio_id: The audio block ID
+        :return: The beginning (usually title) of the transcription block ID
+        """
+        response = await self._raw_query(
+            sql_query=f"SELECT * FROM blocks WHERE alias LIKE '%transcription-{audio_id}%'"
+        )
+
+        if not response:
+            raise SiYuanApiError(
+                message='Transcription block not found',
+                status_code=404,
+            )
+
+        return response[0]['id']
+
+    async def get_audio_transcription_ids(self,
+                                          audio_ids: list[str],
+                                          ) -> dict[str, str]:
+        """
+        Get the transcript block ids for multiple audio blocks
+        :param audio_ids: The audio block IDs
+        :return: A dictionary mapping the audio block ID to the
+                 transcription block ID
+        """
+        audio_ids = deepcopy(audio_ids)
+        response = await self._raw_query(
+            sql_query="SELECT * FROM blocks WHERE alias LIKE '%transcription-%'"
+        )
+
+        transcription_ids = {}
+
+        pattern = re.compile(r'transcription-(\d{14}-\w{7})')
+        for block in response:
+            # Regex extracts the audio block ID (14 digits - 7 random chars)
+            audio_id = pattern.search(block['alias'])
+
+            if audio_id:
+                audio_id = audio_id.group(1)
+                if audio_id in audio_ids:
+                    transcription_ids[audio_id] = block['id']
+                    audio_ids.remove(audio_id)
+
+        return transcription_ids
 
     async def get_blocks_by_time(self,
                                  updated_after: datetime = None,
@@ -357,25 +462,74 @@ class SiyuanApi:
         :param markdown_content: The content of the note in Markdown format
         :return: The ID of newly created note
         """
-        response = await self._client.post(
-            url='/api/filetree/createDocWithMd',
-            json={
+        response = await self._raw_post(
+            url='/api/filetree/createDoc',
+            payload={
                 'notebook': notebook_id,
                 'path': path,
-                'markdown': markdown_content
-            }
+                'markdown': markdown_content,
+            },
         )
 
-        if response.status_code != 200:
+        return response
+
+    async def insert_block(self,
+                           markdown_content: str,
+                           next_id: str = None,
+                           previous_id: str = None,
+                           parent_id: str = None,
+                           ) -> str:
+        """
+        Insert a block into a note by locators
+
+        At least one of the locators need to be present. If multiple are present,
+        the priority is: next_id > previous_id > parent_id.
+        :param markdown_content: The markdown content of the block. If the
+            content is complex, multiple blocks may be created
+        :param next_id: The block ID AFTER the intended insertion location
+        :param previous_id: The block ID BEFORE the intended insertion location
+        :param parent_id: The ID of the parent block. The new block will be placed
+            at the last of its children
+        :return: The ID of the block created
+        """
+        if not next_id and not previous_id and not parent_id:
             raise SiYuanApiError(
-                message='Failed to create note',
-                status_code=response.status_code,
+                message='At least one of next_id, previous_id or parent_id must be provided',
             )
 
-        if response.json().get('code') != 0:
+        response = await self._raw_post(
+            url='/api/block/insertBlock',
+            payload={
+                'dataType': 'markdown',
+                'data': markdown_content,
+                'nextID': next_id or '',
+                'previousID': previous_id or '',
+                'parentID': parent_id or '',
+            },
+        )
+
+        if response['undoOperations']:
             raise SiYuanApiError(
-                message=response.json()['msg'],
-                status_code=response.status_code,
+                message='Operation failed'
             )
 
-        return response.json().get('data')
+        return response['doOperations']['id']
+
+    async def set_block_attribute(self,
+                                  block_id: str,
+                                  attributes: dict[str, str],
+                                  ):
+        """
+        Set attributes of an existing block
+
+        :param block_id: The ID of the block to set attributes for
+        :param attributes: A dictionary of attributes to set for the block
+        :return:
+        """
+        await self._raw_post(
+            url='/api/attr/setBlockAttrs',
+            payload={
+                'id': block_id,
+                'attrs': attributes,
+            }
+        )

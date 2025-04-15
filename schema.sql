@@ -19,5 +19,4 @@ CREATE TABLE blocks (
     sort         INTEGER DEFAULT 0,                       -- Sort value, smaller = higher priority
     created      CHAR(14)  NOT NULL,                      -- Creation timestamp in `yyyyMMddHHmmss` format
     updated      CHAR(14)  NOT NULL,                      -- Update timestamp in `yyyyMMddHHmmss` format
-
 );
