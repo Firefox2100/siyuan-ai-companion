@@ -217,9 +217,11 @@ class Transcriber:
                 )
 
             results.sort(key=lambda x: x['start'])
-            cleaned_result = self._cleanup_segments(results)
-            merged_result = self._merge_segments(cleaned_result)
-            formatted_output = '\n\n'.join(merged_result)
+            formatted_output = '\n\n'.join(
+                self._merge_segments(
+                    self._cleanup_segments(results)
+                )
+            )
 
             notebook_id = t_notebook or APP_CONFIG.siyuan_transcribe_notebook
             audio_block_id = await siyuan.get_audio_block(

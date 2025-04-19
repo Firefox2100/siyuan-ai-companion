@@ -4,6 +4,7 @@ SiYuan API client
 It handles the communication with the SiYuan server, querying
 blocks, tracking updates and retrieving notes.
 """
+
 import re
 from copy import deepcopy
 from contextlib import asynccontextmanager

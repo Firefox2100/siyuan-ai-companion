@@ -53,7 +53,7 @@ class RagDriver:
 
         :param block_id: The ID of the block, used in SiYuan
         :param block_content: The content of the block, plain text
-                              with markdown stripped
+                              with Markdown stripped
         :return: None
         """
         vector = self.transformer.encode(

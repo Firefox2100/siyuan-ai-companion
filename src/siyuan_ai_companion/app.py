@@ -1,3 +1,10 @@
+"""
+Main application entry point for the Siyuan AI Companion.
+
+In debug mode, run a Werkzeug server with CORS disabled.
+DO NOT USE THIS IN PRODUCTION.
+"""
+
 import os
 import logging
 from quart import Quart
@@ -10,6 +17,9 @@ from siyuan_ai_companion.views import asset_blueprint, openai_blueprint
 
 
 def create_app(debug = False):
+    """
+    Create and configure the Quart application.
+    """
     quart_app = Quart(__name__)
 
     if debug:

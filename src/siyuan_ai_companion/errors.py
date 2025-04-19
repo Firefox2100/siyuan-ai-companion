@@ -1,4 +1,11 @@
+"""
+SiYuan Ai Companion Errors
+"""
+
 class SiYuanAiCompanionError(Exception):
+    """
+    Base class for all exceptions raised by the SiYuan Ai Companion.
+    """
     def __init__(self,
                  message: str = None,
                  status_code: int = 500,
@@ -10,4 +17,6 @@ class SiYuanAiCompanionError(Exception):
 
 
 class SiYuanApiError(SiYuanAiCompanionError):
-    pass
+    """
+    Error calling SiYuan API.
+    """

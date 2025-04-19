@@ -1,3 +1,8 @@
+"""
+This module contains the task functions for running in
+the background
+"""
+
 from datetime import datetime
 
 from siyuan_ai_companion.model import RagDriver, SiyuanApi
@@ -8,7 +13,7 @@ async def update_index():
     Update the vector index with new blocks
     """
     try:
-        with open('last_update') as f:
+        with open('last_update', encoding='utf-8') as f:
             last_update = int(f.read())
     except FileNotFoundError:
         last_update = 0
@@ -36,5 +41,5 @@ async def update_index():
                 blocks=updated_content,
             )
 
-            with open('last_update', 'w') as f:
+            with open('last_update', 'w', encoding='utf-8') as f:
                 f.write(str(int(current_time.timestamp())))
