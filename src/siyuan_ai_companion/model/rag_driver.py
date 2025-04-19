@@ -42,16 +42,18 @@ class RagDriver:
 
     @staticmethod
     def _hash_id(note_id: str) -> int:
-        return int.from_bytes(hashlib.md5(note_id.encode()).digest()[:8], "big")
+        return int.from_bytes(hashlib.md5(note_id.encode()).digest()[:8], 'big')
 
     def add_block(self,
                   block_id: str,
+                  document_id: str,
                   block_content: str,
                   ):
         """
         Add a block to the vector index
 
         :param block_id: The ID of the block, used in SiYuan
+        :param document_id: The ID of the document containing the block, used in SiYuan
         :param block_content: The content of the block, plain text
                               with Markdown stripped
         :return: None
@@ -66,6 +68,7 @@ class RagDriver:
             vector=vector,
             payload={
                 'blockId': block_id,
+                'documentId': document_id,
             }
         )
 
@@ -75,17 +78,17 @@ class RagDriver:
         )
 
     def add_blocks(self,
-                         blocks: list[tuple[str, str]],
-                         ):
+                   blocks: list[tuple[str, str, str]],
+                   ):
         """
         Add multiple blocks to the vector index
 
         :param blocks: A list of tuples, each containing the ID
-                       of the block and its content
+                       of the block, document ID and its content
         """
         points = []
 
-        for block_id, block_content in blocks:
+        for block_id, block_content, document_id in blocks:
             vector = self.transformer.encode(
                 sentences=block_content,
                 normalize_embeddings=True,
@@ -96,6 +99,7 @@ class RagDriver:
                 vector=vector,
                 payload={
                     'blockId': block_id,
+                    'documentId': document_id,
                 }
             )
 
@@ -108,6 +112,7 @@ class RagDriver:
 
     def update_block(self,
                      block_id: str,
+                     document_id: str,
                      block_content: str,
                      ):
         """
@@ -116,25 +121,27 @@ class RagDriver:
         For now this uses the same upsert method as add_block,
         which will replace the existing index
         :param block_id: The ID of the block, used in SiYuan
+        :param document_id: The ID of the document containing the block, used in SiYuan
         :param block_content: The content of the block, plain text
-                              with markdown stripped
+                              with Markdown stripped
         :return: None
         """
         self.add_block(
             block_id=block_id,
-            block_content=block_content
+            document_id=document_id,
+            block_content=block_content,
         )
 
     def update_blocks(self,
-                      blocks: list[tuple[str, str]],
+                      blocks: list[tuple[str, str, str]],
                       ):
         """
         Update multiple blocks in the vector index
 
-        For now this uses the same upsert method as add_block,
+        For now, this uses the same upsert method as add_block,
         which will replace the existing index
         :param blocks: A list of tuples, each containing the ID
-                       of the block and its content
+                       of the block, document ID and its content
         :return: None
         """
         self.add_blocks(

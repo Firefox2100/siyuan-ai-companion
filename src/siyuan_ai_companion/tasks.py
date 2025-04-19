@@ -26,18 +26,19 @@ async def update_index():
             updated_after=last_update_datetime,
         )
 
-        updated_content: list[tuple[str, str]] = []
+        updated_content: list[tuple[str, str, str]] = []
 
         for block in blocks:
             block_id = block['id']
             block_content = block['content']
+            document_id = block['root_id']
 
-            updated_content.append((block_id, block_content))
+            updated_content.append((block_id, block_content, document_id))
 
         if updated_content:
             rag_driver = RagDriver()
 
-            rag_driver.add_blocks(
+            rag_driver.update_blocks(
                 blocks=updated_content,
             )
 
