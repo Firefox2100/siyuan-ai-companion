@@ -40,14 +40,15 @@ async def get_audio_assets():
             audio_assets=audio_assets,
         )
         transcription_ids = await siyuan.get_audio_transcription_ids(
-            audio_ids=audio_blocks,
+            audio_ids=audio_blocks.values(),
         )
 
-        for audio_block in audio_blocks:
-            if not transcription_ids.get(audio_block):
-                transcription_ids[audio_block] = None
+        result = {}
 
-        return jsonify(transcription_ids)
+        for audio_path in audio_blocks.keys():
+            result[audio_path] = transcription_ids.get(audio_blocks[audio_path])
+
+        return jsonify(result)
 
 
 @asset_blueprint.route('/transcribe', methods=['POST'])
