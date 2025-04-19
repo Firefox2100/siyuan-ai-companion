@@ -25,6 +25,7 @@ dependencies = [
     "faster-whisper~=1.1.1",
     "httpx~=0.28.1",
     "pyannote.audio~=3.3.2",
+    "pydantic-settings~=2.9.1",
     "qdrant-client~=1.13.3",
     "quart~=0.20.0",
     "quart-cors~=0.8.0",

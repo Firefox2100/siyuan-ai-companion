@@ -13,7 +13,7 @@ from collections import defaultdict
 from datetime import datetime
 from httpx import AsyncClient, Response
 
-from siyuan_ai_companion.consts import SIYUAN_URL, SIYUAN_TOKEN
+from siyuan_ai_companion.consts import APP_CONFIG
 from siyuan_ai_companion.errors import SiYuanApiError
 
 
@@ -37,8 +37,8 @@ class SiyuanApi:
         :param client: The httpx client to use, leave empty to
                        create a new one
         """
-        self.url = url or SIYUAN_URL
-        self.token = token or SIYUAN_TOKEN
+        self.url = url or APP_CONFIG.siyuan_url
+        self.token = token or APP_CONFIG.siyuan_token
 
         headers = None
         if self.token is not None:

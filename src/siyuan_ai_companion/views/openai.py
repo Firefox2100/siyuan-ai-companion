@@ -5,7 +5,7 @@ Blueprint definition for OpenAI compatible API endpoints.
 from urllib.parse import urljoin
 from quart import Blueprint, request, jsonify
 
-from siyuan_ai_companion.consts import OPENAI_URL
+from siyuan_ai_companion.consts import APP_CONFIG
 from siyuan_ai_companion.model import RagDriver
 from .utils import token_required, forward_request
 
@@ -42,7 +42,7 @@ async def v1_chat_completion():
             message['content'] = new_prompt
             break
 
-    target_url = urljoin(OPENAI_URL, '/chat/completions')
+    target_url = urljoin(APP_CONFIG.openai_url, '/chat/completions')
     return await forward_request(target_url, request_payload)
 
 
@@ -65,7 +65,7 @@ async def v1_completions():
     new_prompt = await rag_driver.build_prompt(query=prompt)
     request_payload["prompt"] = new_prompt
 
-    target_url = urljoin(OPENAI_URL, 'completions')
+    target_url = urljoin(APP_CONFIG.openai_url, 'completions')
     return await forward_request(target_url, request_payload)
 
 
@@ -78,7 +78,7 @@ async def v1_embeddings():
     This uses the model embedding directly. No prompts injected
     """
     request_payload = await request.get_json()
-    target_url = urljoin(OPENAI_URL, '/embeddings')
+    target_url = urljoin(APP_CONFIG.openai_url, '/embeddings')
     return await forward_request(target_url, request_payload)
 
 
@@ -90,5 +90,5 @@ async def v1_models():
 
     This endpoint returns a model list from the OpenAI API.
     """
-    target_url = urljoin(OPENAI_URL, '/models')
+    target_url = urljoin(APP_CONFIG.openai_url, '/models')
     return await forward_request(target_url, None, method='GET')

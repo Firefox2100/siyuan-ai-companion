@@ -11,7 +11,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 
-from siyuan_ai_companion.consts import QDRANT_COLLECTION_NAME, QDRANT_LOCATION
+from siyuan_ai_companion.consts import APP_CONFIG
 from .siyuan_api import SiyuanApi
 
 
@@ -28,12 +28,12 @@ class RagDriver:
 
         if RagDriver.client is None:
             RagDriver.client = QdrantClient(
-                location=QDRANT_LOCATION,
+                location=APP_CONFIG.qdrant_location,
             )
 
-        if not RagDriver.client.collection_exists(QDRANT_COLLECTION_NAME):
+        if not RagDriver.client.collection_exists(APP_CONFIG.qdrand_collection_name):
             RagDriver.client.create_collection(
-                collection_name=QDRANT_COLLECTION_NAME,
+                collection_name=APP_CONFIG.qdrand_collection_name,
                 vectors_config=VectorParams(
                     size=RagDriver.transformer.get_sentence_embedding_dimension(),
                     distance=Distance.COSINE,
@@ -70,7 +70,7 @@ class RagDriver:
         )
 
         self.client.upsert(
-            collection_name=QDRANT_COLLECTION_NAME,
+            collection_name=APP_CONFIG.qdrand_collection_name,
             points=[point],
         )
 
@@ -102,7 +102,7 @@ class RagDriver:
             points.append(point)
 
         self.client.upsert(
-            collection_name=QDRANT_COLLECTION_NAME,
+            collection_name=APP_CONFIG.qdrand_collection_name,
             points=points,
         )
 
@@ -151,7 +151,7 @@ class RagDriver:
         :return: None
         """
         self.client.delete(
-            collection_name=QDRANT_COLLECTION_NAME,
+            collection_name=APP_CONFIG.qdrand_collection_name,
             points_selector={'points': [self._hash_id(block_id)]},
         )
 
@@ -160,11 +160,11 @@ class RagDriver:
         Delete all blocks from the vector index
         """
         self.client.delete_collection(
-            collection_name=QDRANT_COLLECTION_NAME,
+            collection_name=APP_CONFIG.qdrand_collection_name,
         )
 
         self.client.create_collection(
-            collection_name=QDRANT_COLLECTION_NAME,
+            collection_name=APP_CONFIG.qdrand_collection_name,
             vectors_config=VectorParams(
                 size=self.transformer.get_sentence_embedding_dimension(),
                 distance=Distance.COSINE,
@@ -190,7 +190,7 @@ class RagDriver:
 
         try:
             hits = self.client.query_points(
-                collection_name=QDRANT_COLLECTION_NAME,
+                collection_name=APP_CONFIG.qdrand_collection_name,
                 query=query_vector,
                 limit=limit,
             )

@@ -7,7 +7,7 @@ from copy import deepcopy
 from quart import Response, request, jsonify
 import httpx
 
-from siyuan_ai_companion.consts import COMPANION_TOKEN, OPENAI_TOKEN
+from siyuan_ai_companion.consts import APP_CONFIG
 
 
 async def forward_request(url: str,
@@ -27,9 +27,9 @@ async def forward_request(url: str,
     """
     headers = deepcopy(request.headers)
 
-    if OPENAI_TOKEN:
+    if APP_CONFIG.openai_token:
         # Add the OpenAI token to the headers if it is set
-        headers['Authorization'] = f'Bearer {OPENAI_TOKEN}'
+        headers['Authorization'] = f'Bearer {APP_CONFIG.openai_token}'
     else:
         headers.pop('Authorization')
 
@@ -65,7 +65,7 @@ def token_required(f):
     """
     @wraps(f)
     async def decorated(*args, **kwargs):
-        if COMPANION_TOKEN is None:
+        if APP_CONFIG.companion_token is None:
             # No token set, authentication disabled
             return await f(*args, **kwargs)
 
@@ -73,7 +73,7 @@ def token_required(f):
         if not token_header:
             return jsonify({'error': 'Authorization header is missing'}), 401
 
-        if token_header.split(' ')[1] != COMPANION_TOKEN:
+        if token_header.split(' ')[1] != APP_CONFIG.companion_token:
             return jsonify({'error': 'Invalid companion token'}), 401
 
         return await f(*args, **kwargs)

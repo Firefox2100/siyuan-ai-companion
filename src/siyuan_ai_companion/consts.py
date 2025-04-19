@@ -4,6 +4,9 @@ Constant values and configuration for the Siyuan AI Companion project.
 
 import os
 import logging
+from typing import Optional
+from pydantic import Field
+from pydantic_settings import BaseSettings
 from platformdirs import user_data_dir
 
 
@@ -18,7 +21,7 @@ def _get_data_dir():
 
     if not data_dir:
         # Use default data directory
-        data_dir = user_data_dir(APPLICATION_NAME)
+        data_dir = user_data_dir(APP_CONFIG.application_name)
 
     if not os.path.exists(data_dir):
         os.makedirs(data_dir, exist_ok=True)
@@ -26,59 +29,71 @@ def _get_data_dir():
     return data_dir
 
 
-# Configuration constants
-APPLICATION_NAME = 'siyuan-ai-companion'
-SIYUAN_URL = os.getenv(                 # SiYuan API URL root
-    'SIYUAN_URL',
-    'http://localhost:6806'
-)
-SIYUAN_TOKEN = os.getenv(               # SiYuan API (NOT AUTHORISATION CODE) TOKEN
-    'SIYUAN_TOKEN',
-    None
-)
-QDRANT_LOCATION = os.getenv(            # Qdrant database location, can be :memory:
-    'QDRANT_LOCATION',
-    'http://localhost:6333'
-)
-QDRANT_COLLECTION_NAME = os.getenv(     # Qdrant collection name
-    'QDRANT_COLLECTION_NAME',
-    'siyuan_ai_companion'
-)
-OPENAI_URL = os.getenv(                 # OpenAI compatible URL to proxy to
-    'OPENAI_URL',
-    'https://api.openai.com/v1/'
-)
-OPENAI_TOKEN = os.getenv(               # OpenAI API token
-    'OPENAI_TOKEN',
-    None
-)
-COMPANION_TOKEN = os.getenv(            # Token to authenticate with this service
-    'COMPANION_TOKEN',
-    None
-)
-WHISPER_WORKERS = int(os.getenv(        # Number of workers to use for faster-whisper
-    'WHISPER_WORKERS',
-    '1'
-))
-HUGGINGFACE_HUB_TOKEN = os.getenv(      # Hugging Face Hub token for downloading models
-    'HUGGINGFACE_HUB_TOKEN',
-    None
-)
+class AppConfig(BaseSettings):
+    """
+    Application configuration settings.
+    """
+    # Core service configuration
+    application_name: str = 'siyuan-ai-companion'
+
+    # SiYuan
+    siyuan_url: str = Field(
+        'http://localhost:6806',
+        description='SiYuan API URL root'
+    )
+    siyuan_token: Optional[str] = Field(
+        None,
+        description='SiYuan API token (not auth code)'
+    )
+
+    # Qdrant
+    qdrant_location: str = Field(
+        'http://localhost:6333',
+        description='Qdrant database location'
+    )
+    qdrant_collection_name: str = Field(
+        'siyuan_ai_companion',
+        description='Qdrant collection name'
+    )
+
+    # OpenAI
+    openai_url: str = Field(
+        'https://api.openai.com/v1/',
+        description='OpenAI-compatible proxy URL'
+    )
+    openai_token: Optional[str] = Field(
+        None,
+        description='OpenAI API token'
+    )
+
+    # Service Authentication
+    companion_token: Optional[str] = Field(
+        None,
+        description='Token to authenticate with this service'
+    )
+
+    # Runtime Behaviour
+    whisper_workers: int = Field(
+        1,
+        description='Number of workers for faster-whisper'
+    )
+    huggingface_hub_token: Optional[str] = Field(
+        None,
+        description='HF Hub token for model downloads'
+    )
+    siyuan_transcribe_notebook: Optional[str] = Field(
+        None,
+        description='Notebook to store transcribed notes'
+    )
+
+    # Debug / Override flags
+    force_update_index: bool = Field(
+        False,
+        description='Force update index on startup'
+    )
 
 
-# Overridable configurations for runtime behavior
-SIYUAN_TRANSCRIBE_NOTEBOOK = os.getenv( # Where to store the transcribed notes
-    'SIYUAN_TRANSCRIBE_NOTEBOOK',
-    None
-)
-
-
-# Debug or behavior overrides
-FORCE_UPDATE_INDEX = os.getenv(         # Force update the index on startup
-    'FORCE_UPDATE_INDEX',
-    'false'
-).lower() == 'true'
-
+APP_CONFIG = AppConfig()
 
 # Utility
 LOGGER = logging.getLogger('siyuan-ai-companion')

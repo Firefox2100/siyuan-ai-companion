@@ -10,8 +10,7 @@ from faster_whisper import WhisperModel
 from faster_whisper.transcribe import Segment
 from pyannote.audio import Pipeline
 
-from siyuan_ai_companion.consts import HUGGINGFACE_HUB_TOKEN, WHISPER_WORKERS, \
-    SIYUAN_TRANSCRIBE_NOTEBOOK
+from siyuan_ai_companion.consts import APP_CONFIG
 from .siyuan_api import SiyuanApi
 
 
@@ -64,7 +63,7 @@ class Transcriber:
         wm = WhisperModel(
             'medium',
             compute_type='int8_float32',
-            num_workers=WHISPER_WORKERS,
+            num_workers=APP_CONFIG.whisper_workers,
         )
         return wm
 
@@ -76,7 +75,7 @@ class Transcriber:
         """
         pipeline = Pipeline.from_pretrained(
             'pyannote/speaker-diarization',
-            use_auth_token=HUGGINGFACE_HUB_TOKEN,
+            use_auth_token=APP_CONFIG.huggingface_hub_token,
         )
         return pipeline
 
@@ -222,7 +221,7 @@ class Transcriber:
             merged_result = self._merge_segments(cleaned_result)
             formatted_output = '\n\n'.join(merged_result)
 
-            notebook_id = t_notebook or SIYUAN_TRANSCRIBE_NOTEBOOK
+            notebook_id = t_notebook or APP_CONFIG.siyuan_transcribe_notebook
             audio_block_id = await siyuan.get_audio_block(
                 audio_name=asset_path.split('/')[-1],
             )

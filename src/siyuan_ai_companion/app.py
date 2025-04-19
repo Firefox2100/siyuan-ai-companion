@@ -4,7 +4,7 @@ from quart import Quart
 from quart_cors import cors
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from siyuan_ai_companion.consts import FORCE_UPDATE_INDEX
+from siyuan_ai_companion.consts import APP_CONFIG
 from siyuan_ai_companion.tasks import update_index
 from siyuan_ai_companion.views import asset_blueprint, openai_blueprint
 
@@ -34,7 +34,7 @@ def create_app(debug = False):
         scheduler.start()
 
         # Run the task immediately
-        if FORCE_UPDATE_INDEX:
+        if APP_CONFIG.force_update_index:
             # Remove the timestamp file
             try:
                 os.remove('last_update')
