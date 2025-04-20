@@ -11,10 +11,10 @@ import tiktoken
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerFast
 from markdown_it import MarkdownIt
 
-from siyuan_ai_companion.consts import APP_CONFIG
+from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
 from .siyuan_api import SiyuanApi
 
 
@@ -24,6 +24,9 @@ class RagDriver:
     """
     transformer: SentenceTransformer = None
     client: QdrantClient = None
+    _openai_tokenizer: tiktoken.Encoding | None = None
+    _huggingface_tokenizer: PreTrainedTokenizerFast | None = None
+    _selected_model: str = None
 
     def __init__(self):
         if RagDriver.transformer is None:
@@ -34,44 +37,77 @@ class RagDriver:
                 location=APP_CONFIG.qdrant_location,
             )
 
-        if not RagDriver.client.collection_exists(APP_CONFIG.qdrand_collection_name):
+        if not RagDriver.client.collection_exists(APP_CONFIG.qdrant_collection_name):
             RagDriver.client.create_collection(
-                collection_name=APP_CONFIG.qdrand_collection_name,
+                collection_name=APP_CONFIG.qdrant_collection_name,
                 vectors_config=VectorParams(
                     size=RagDriver.transformer.get_sentence_embedding_dimension(),
                     distance=Distance.COSINE,
                 )
             )
 
+    @property
+    def selected_model(self) -> str:
+        """
+        The currently selected model for tokenisation
+        """
+        if RagDriver._selected_model is None:
+            RagDriver.selected_model = 'gpt-3.5-turbo'
+
+        return RagDriver._selected_model
+
+    @selected_model.setter
+    def selected_model(self, model_name: str):
+        """
+        Set the currently selected model for tokenisation
+
+        :param model_name: The name of the model to use
+        """
+        if model_name == RagDriver._selected_model:
+            # No need to set the model again
+            return
+
+        RagDriver._selected_model = model_name
+        LOGGER.info('Selected model: %s', model_name)
+
+        if model_name.startswith('gpt'):
+            # OpenAI models
+            RagDriver._openai_tokenizer = tiktoken.encoding_for_model(model_name)
+            RagDriver._huggingface_tokenizer = None
+        else:
+            # Huggingface models
+            RagDriver._huggingface_tokenizer = AutoTokenizer.from_pretrained(model_name)
+            RagDriver._openai_tokenizer = None
+
+    @property
+    def tokenizer(self) -> PreTrainedTokenizerFast | tiktoken.Encoding:
+        """
+        The currently selected tokeniser
+        """
+        if self.selected_model.startswith('gpt'):
+            return RagDriver._openai_tokenizer
+
+        return RagDriver._huggingface_tokenizer
+
     @staticmethod
     def _hash_id(note_id: str) -> int:
         return int.from_bytes(hashlib.md5(note_id.encode()).digest()[:8], 'big')
 
-    @staticmethod
-    def _estimate_tokens(passage: str,
-                         model_name: str = 'gpt-3.5-turbo',
+    def _estimate_tokens(self,
+                         passage: str,
                          ) -> int:
         """
-        Estimate the token usage of a passage based a on given model name
+        Estimate the token usage of a passage based on a given model name
 
         :param passage: The passage to estimate the token usage for
-        :param model_name: The model name to use for tokenisation
         :return: The estimated number of tokens
         """
-        if model_name.startswith('gpt'):
-            # OpenAI models
-            encoding = tiktoken.encoding_for_model(model_name)
-            return len(encoding.encode(passage))
-
-        # Default to huggingface models
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        return len(tokenizer.encode(passage))
+        return len(self.tokenizer.encode(passage))
 
     def _segment_document(self,
                           document: str,
                           matching_blocks: list[str],
                           max_tokens: int = 512,
-                          model_name: str = 'gpt-3.5-turbo',
                           ) -> list[str]:
         """
         Segment the document based on Markdown structure and the matching block
@@ -88,7 +124,6 @@ class RagDriver:
 
         if self._estimate_tokens(
             passage=document,
-            model_name=model_name,
         ) <= max_tokens:
             # No need to segment if the document is small enough
             return [document]
@@ -120,7 +155,6 @@ class RagDriver:
                     )
                     current_content = []
 
-                current_level = int(tok.tag[1])
                 current_title = tokens[i + 1].content  # heading content is always next
                 i += 2  # skip heading_open and inline
             else:
@@ -135,6 +169,10 @@ class RagDriver:
                 )
             )
 
+        if len(blocks) == 1:
+            # Prevent infinite loop if the block is still too long but can't be split
+            return [document]
+
         # Find the blocks containing the matching block
         results = []
 
@@ -144,19 +182,18 @@ class RagDriver:
                     # Check if the block is too long
                     if self._estimate_tokens(
                         passage=text,
-                        model_name=model_name,
                     ) > max_tokens:
                         # Split the block into smaller segments
                         segments = self._segment_document(
                             document=text,
                             matching_blocks=[b],
                             max_tokens=max_tokens,
-                            model_name=model_name,
                         )
                         results.extend(segments)
                     else:
                         results.append(text)
 
+        LOGGER.debug('Segmented document: %s', results)
         return results
 
     def add_block(self,
@@ -189,9 +226,11 @@ class RagDriver:
         )
 
         self.client.upsert(
-            collection_name=APP_CONFIG.qdrand_collection_name,
+            collection_name=APP_CONFIG.qdrant_collection_name,
             points=[point],
         )
+
+        LOGGER.debug('Added block: %s', block_id)
 
     def add_blocks(self,
                    blocks: list[tuple[str, str, str]],
@@ -223,9 +262,11 @@ class RagDriver:
             points.append(point)
 
         self.client.upsert(
-            collection_name=APP_CONFIG.qdrand_collection_name,
+            collection_name=APP_CONFIG.qdrant_collection_name,
             points=points,
         )
+
+        LOGGER.debug('Added blocks: %s', [block[0] for block in blocks])
 
     def update_block(self,
                      block_id: str,
@@ -249,6 +290,8 @@ class RagDriver:
             block_content=block_content,
         )
 
+        LOGGER.debug('Updated block: %s', block_id)
+
     def update_blocks(self,
                       blocks: list[tuple[str, str, str]],
                       ):
@@ -265,6 +308,8 @@ class RagDriver:
             blocks=blocks,
         )
 
+        LOGGER.debug('Updated blocks: %s', [block[0] for block in blocks])
+
     def delete_block(self,
                      block_id: str,
                      ):
@@ -275,25 +320,29 @@ class RagDriver:
         :return: None
         """
         self.client.delete(
-            collection_name=APP_CONFIG.qdrand_collection_name,
+            collection_name=APP_CONFIG.qdrant_collection_name,
             points_selector={'points': [self._hash_id(block_id)]},
         )
+
+        LOGGER.debug('Deleted block: %s', block_id)
 
     def delete_all(self):
         """
         Delete all blocks from the vector index
         """
         self.client.delete_collection(
-            collection_name=APP_CONFIG.qdrand_collection_name,
+            collection_name=APP_CONFIG.qdrant_collection_name,
         )
 
         self.client.create_collection(
-            collection_name=APP_CONFIG.qdrand_collection_name,
+            collection_name=APP_CONFIG.qdrant_collection_name,
             vectors_config=VectorParams(
                 size=self.transformer.get_sentence_embedding_dimension(),
                 distance=Distance.COSINE,
             )
         )
+
+        LOGGER.debug('Deleted all blocks from the vector index')
 
     def search(self,
                query: str,
@@ -307,6 +356,8 @@ class RagDriver:
         :return: A list of the most relevant blocks, with their IDs
                  and scores
         """
+        LOGGER.debug('Searching for blocks with query: %s', query)
+
         query_vector = self.transformer.encode(
             sentences=query,
             normalize_embeddings=True,
@@ -314,7 +365,7 @@ class RagDriver:
 
         try:
             hits = self.client.query_points(
-                collection_name=APP_CONFIG.qdrand_collection_name,
+                collection_name=APP_CONFIG.qdrant_collection_name,
                 query=query_vector,
                 limit=limit,
             )
@@ -323,11 +374,13 @@ class RagDriver:
             return []
 
         results = []
+        LOGGER.debug('%s results found', len(hits.points))
 
         for hit in hits.points:
             results.append({
                 'blockId': hit.payload['blockId'],
                 'documentId': hit.payload['documentId'],
+                'content': hit.payload['content'],
                 'score': hit.score,
             })
 
@@ -337,7 +390,6 @@ class RagDriver:
                           query: str,
                           limit: int = 3,
                           max_tokens: int = 512,
-                          model_name: str ='gpt-3.5-turbo',
                           ) -> list[str]:
         """
         Get the context for the given query
@@ -345,9 +397,10 @@ class RagDriver:
         :param query: The user message
         :param limit: The number of search results to use
         :param max_tokens: The maximum number of tokens that can be used by the segment
-        :param model_name: The model name to use for tokenisation
         :return: The context, in Markdown format
         """
+        LOGGER.debug('Getting context for: %s', query)
+
         search_results = self.search(
             query=query,
             limit=limit,
@@ -360,6 +413,8 @@ class RagDriver:
             result['documentId']
             for result in search_results
         ))
+
+        LOGGER.debug('Found %d documents', len(document_ids))
 
         async with SiyuanApi() as siyuan:
             tasks = [
@@ -382,10 +437,11 @@ class RagDriver:
                 document=notes[i],
                 matching_blocks=matching_blocks,
                 max_tokens=max_tokens,
-                model_name=model_name,
             ))
 
         segments = list(set(segments))
+
+        LOGGER.debug('Segments: %s', segments)
 
         return segments
 
@@ -393,7 +449,6 @@ class RagDriver:
                            query: str,
                            limit: int = 3,
                            max_tokens: int = 512,
-                           model_name: str = 'gpt-3.5-turbo',
                            ) -> str:
         """
         Construct the prompt using the search results
@@ -404,14 +459,12 @@ class RagDriver:
         :param query: The user message
         :param limit: The number of search results to use
         :param max_tokens: The maximum number of tokens that can be used by the segment
-        :param model_name: The model name to use for tokenisation
         :return: The prompt, added with the search results
         """
         contexts = await self.get_context(
             query=query,
             limit=limit,
             max_tokens=max_tokens,
-            model_name=model_name,
         )
 
         prompt = 'Additional context:\n\n'

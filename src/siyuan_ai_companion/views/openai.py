@@ -41,10 +41,9 @@ async def v1_chat_completion_rag():
         return jsonify({'error': 'No user message provided'}), 400
 
     rag_driver = RagDriver()
-
+    rag_driver.selected_model = chat_model
     new_prompt = await rag_driver.build_prompt(
         query=user_message,
-        model_name=chat_model,
     )
 
     # Inject the RAG-generated prompt into the user message
@@ -93,9 +92,9 @@ async def v1_completions_rag():
         chat_model = request_payload.get('model')
 
     rag_driver = RagDriver()
+    rag_driver.selected_model = chat_model
     new_prompt = await rag_driver.build_prompt(
         query=prompt,
-        model_name=chat_model,
     )
     request_payload['prompt'] = new_prompt
 
@@ -158,9 +157,9 @@ async def v1_retrieve():
         return jsonify({'error': 'No user message provided'}), 400
 
     rag_driver = RagDriver()
+    rag_driver.selected_model = chat_model
     context = await rag_driver.get_context(
         query=user_message,
-        model_name=chat_model,
     )
 
     return jsonify({'context': context})

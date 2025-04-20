@@ -91,11 +91,28 @@ class AppConfig(BaseSettings):
         False,
         description='Force update index on startup'
     )
+    companion_logging_level: str = Field(
+        'INFO',
+        description='Logging level for the companion service'
+    )
 
 
 APP_CONFIG = AppConfig()
 
 # Utility
 LOGGER = logging.getLogger('siyuan-ai-companion')
-LOGGER.setLevel(logging.INFO)
+LOGGER.setLevel(APP_CONFIG.companion_logging_level)
+
+if not LOGGER.hasHandlers():
+    # Create a console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(APP_CONFIG.companion_logging_level)
+
+    # Create a formatter and set it for the handler
+    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s]: %(message)s')
+    console_handler.setFormatter(formatter)
+
+    # Add the handler to the logger
+    LOGGER.addHandler(console_handler)
+
 DATA_DIR = _get_data_dir()

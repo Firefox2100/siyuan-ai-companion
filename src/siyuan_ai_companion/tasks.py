@@ -5,6 +5,7 @@ the background
 
 from datetime import datetime
 
+from siyuan_ai_companion.consts import LOGGER
 from siyuan_ai_companion.model import RagDriver, SiyuanApi
 
 
@@ -12,6 +13,8 @@ async def update_index():
     """
     Update the vector index with new blocks
     """
+    LOGGER.info("Updating vector index")
+
     try:
         with open('last_update', encoding='utf-8') as f:
             last_update = int(f.read())
@@ -25,6 +28,8 @@ async def update_index():
         blocks = await siyuan.get_blocks_by_time(
             updated_after=last_update_datetime,
         )
+
+        LOGGER.info('%s blocks updated since last update', len(blocks))
 
         updated_content: list[tuple[str, str, str]] = []
 
@@ -44,3 +49,5 @@ async def update_index():
 
             with open('last_update', 'w', encoding='utf-8') as f:
                 f.write(str(int(current_time.timestamp())))
+
+            LOGGER.info('Index updated successfully')
