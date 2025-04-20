@@ -10,7 +10,6 @@ from copy import deepcopy
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 from tempfile import NamedTemporaryFile
-from collections import defaultdict
 from datetime import datetime
 from httpx import AsyncClient, Response
 
@@ -122,41 +121,6 @@ class SiyuanApi:
                 'stmt': sql_query,
             },
         )
-
-    @staticmethod
-    def _sort_nodes(nodes: list[dict]) -> list[dict]:
-        """
-        Sorting function for SiYuan blocks within the same note
-
-        Sorting rules:
-        - Nodes with no parent ID are considered root nodes
-        - Nodes are sorted by their sort value, ascending order
-        - Parent comes before children
-        - Children stays with its parent, before other nodes in the
-          parent level
-
-        :param nodes: The list of nodes to sort
-        :return: The sorted list of nodes
-        """
-        children_map = defaultdict(list)
-        roots = []
-
-        for obj in nodes:
-            if obj['parent_id']:
-                children_map[obj['parent_id']].append(obj)
-            else:
-                roots.append(obj)
-
-        def walk(node_list):
-            node_list.sort(key=lambda x: x['sort'])
-            result = []
-            for node in node_list:
-                result.append(node)
-                children = children_map.get(node['id'], [])
-                result.extend(walk(children))
-            return result
-
-        return walk(roots)
 
     async def _list_files_recursive(self,
                                     path: str,
@@ -346,55 +310,23 @@ class SiyuanApi:
 
         return payload
 
-    async def get_blocks_by_note(self,
-                                 note_id: str,
-                                 ) -> list[dict]:
+    async def get_note_markdown(self,
+                                note_id: str,
+                                ) -> str:
         """
-        Get all blocks in a note by its ID
+        Get the Markdown content of a note by its ID
 
         :param note_id: The ID of the note, used in SiYuan
-        :return: A list of blocks in the note
+        :return: The Markdown version of the note
         """
-        if self._block_count is None:
-            await self.get_count()
-
-        payload = await self._raw_query(
-            f"SELECT * FROM blocks WHERE root_id = '{note_id}' LIMIT {self._block_count}"
+        data = await self._raw_post(
+            url='/api/lute/copyStdMarkdown',
+            payload={
+                'id': note_id,
+            },
         )
 
-        payload = self._sort_nodes(payload)
-
-        return payload
-
-    async def get_note_plaintext(self,
-                                 note_id: str,
-                                 ) -> str:
-        """
-        Get the plaintext of a note by its ID
-
-        :param note_id: The ID of the note, used in SiYuan
-        :return: The plaintext of the note
-        """
-        blocks = await self.get_blocks_by_note(
-            note_id=note_id,
-        )
-
-        contents = [
-            block.get('content', '') for block in blocks
-        ]
-
-        content = '\n'.join(contents)
-
-        # Remove the ZWSP and multiple consecutive newlines
-        content = content.replace('\u200b', '')
-        content_lines = content.split('\n')
-        content_lines = [line.strip() for line in content_lines if line.strip()]
-
-        # Remove duplicated lines
-        content_lines = list(dict.fromkeys(content_lines))
-        content = '\n'.join(content_lines)
-
-        return content
+        return data
 
     @asynccontextmanager
     async def download_asset(self,
