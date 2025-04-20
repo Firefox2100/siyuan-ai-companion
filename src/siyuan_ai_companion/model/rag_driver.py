@@ -108,54 +108,56 @@ class RagDriver:
                           document: str,
                           matching_blocks: list[str],
                           max_tokens: int = 512,
+                          current_level: int = None,
                           ) -> list[str]:
         """
         Segment the document based on Markdown structure and the matching block
-        from the vector index
+        from the vector index.
 
         :param document: The document to segment, in Markdown format
         :param matching_blocks: The block from Qdrant, which was used to fetch the full
-                               content of the note
+                                content of the note
         :param max_tokens: The maximum number of tokens that can be used by the segment
+        :param current_level: (internal) the Markdown heading level currently used for splitting
         :return: The segmented document, in Markdown format
         """
         if not matching_blocks:
             raise ValueError('No matching blocks provided for segmentation')
 
-        if self._estimate_tokens(
-            passage=document,
-        ) <= max_tokens:
-            # No need to segment if the document is small enough
+        if self._estimate_tokens(passage=document) <= max_tokens:
             return [document]
 
-        # Use MarkdownIt to parse the document
         md = MarkdownIt()
         tokens = md.parse(document)
+
+        # Extract heading levels
+        all_levels = sorted(set(int(tok.tag[1]) for tok in tokens if tok.type == 'heading_open'))
+        if not all_levels:
+            # No headers found; fallback to paragraph split
+            return self._fallback_split(document, max_tokens)
+
+        split_level = current_level or all_levels[0]
 
         blocks = []
         current_title = None
         current_content = []
 
-        # Find the lowest header level
-        levels = [int(tok.tag[1]) for tok in tokens if tok.type == 'heading_open']
-        split_level = min(levels) if levels else None
-
         i = 0
         while i < len(tokens):
             tok = tokens[i]
-            if tok.type == 'heading_open' and (split_level is None
-                                               or int(tok.tag[1]) == split_level):
+            if tok.type == 'heading_open' and int(tok.tag[1]) == split_level:
                 # Store previous block
                 if current_title or current_content:
                     blocks.append(
                         (
                             current_title or '',
-                            ''.join(t.content for t in current_content).strip()
+                            ''.join(getattr(t, 'content', '')
+                                    for t in current_content).strip()
                         )
                     )
                     current_content = []
 
-                current_title = tokens[i + 1].content  # heading content is always next
+                current_title = tokens[i + 1].content if i + 1 < len(tokens) else ''
                 i += 2  # skip heading_open and inline
             else:
                 current_content.append(tok)
@@ -165,36 +167,74 @@ class RagDriver:
             blocks.append(
                 (
                     current_title or '',
-                    ''.join(t.content for t in current_content).strip()
+                    ''.join(getattr(t, 'content', '')
+                            for t in current_content).strip()
                 )
             )
 
+        # If only one block was produced, try a deeper header level
         if len(blocks) == 1:
-            # Prevent infinite loop if the block is still too long but can't be split
-            return [document]
+            deeper_levels = [lvl for lvl in all_levels if lvl > split_level]
+            if deeper_levels:
+                return self._segment_document(
+                    document,
+                    matching_blocks,
+                    max_tokens,
+                    current_level=deeper_levels[0]
+                )
+            else:
+                return self._fallback_split(document, max_tokens)
 
-        # Find the blocks containing the matching block
+        # Match against relevant blocks
         results = []
 
         for b in matching_blocks:
             for title, text in blocks:
-                if b in text or b in title:
-                    # Check if the block is too long
-                    if self._estimate_tokens(
-                        passage=text,
-                    ) > max_tokens:
-                        # Split the block into smaller segments
-                        segments = self._segment_document(
-                            document=text,
-                            matching_blocks=[b],
-                            max_tokens=max_tokens,
+                if b in title or b in text:
+                    if self._estimate_tokens(passage=text) > max_tokens:
+                        results.extend(
+                            self._segment_document(
+                                text,
+                                [b],
+                                max_tokens,
+                                current_level=split_level,
+                            )
                         )
-                        results.extend(segments)
                     else:
                         results.append(text)
 
         LOGGER.debug('Segmented document: %s', results)
         return results
+
+    def _fallback_split(self,
+                        document: str,
+                        max_tokens: int,
+                        ) -> list[str]:
+        """
+        Split a document by paragraph if no headers are usable.
+
+        This is a fallback method for splitting the document
+        when no headers are found or the document is too long to be accepted.
+        :param document: The document to split
+        :param max_tokens: The maximum number of tokens that can be used by the segment
+        """
+        paragraphs = [p.strip() for p in document.split('\n\n') if p.strip()]
+        segments = []
+        current = ""
+
+        for p in paragraphs:
+            tentative = current + "\n\n" + p if current else p
+            if self._estimate_tokens(tentative) <= max_tokens:
+                current = tentative
+            else:
+                if current:
+                    segments.append(current.strip())
+                current = p
+
+        if current:
+            segments.append(current.strip())
+
+        return segments
 
     def add_block(self,
                   block_id: str,
