@@ -1,9 +1,5 @@
-"""
-Tests related to SiYuan API handling
-"""
-
-from datetime import datetime
 import pytest
+from datetime import datetime
 from httpx import AsyncClient
 from siyuan_ai_companion.model.siyuan_api import SiyuanApi
 from siyuan_ai_companion.errors import SiYuanApiError
@@ -56,73 +52,6 @@ class TestSiyuanApi:
         with pytest.raises(SiYuanApiError):
             await api._raw_query("SELECT COUNT(*) FROM blocks")
 
-    def test_sorts_nodes_with_no_children(self):
-        """
-        Sorting root nodes without children
-        """
-        nodes = [
-            {'id': '1', 'parent_id': None, 'sort': 2},
-            {'id': '2', 'parent_id': None, 'sort': 1},
-        ]
-        sorted_nodes = SiyuanApi._sort_nodes(nodes)
-        assert sorted_nodes == [
-            {'id': '2', 'parent_id': None, 'sort': 1},
-            {'id': '1', 'parent_id': None, 'sort': 2},
-        ]
-
-    def test_sorts_nodes_with_children(self):
-        """
-        Note 2 has 2 children
-        """
-        nodes = [
-            {'id': '1', 'parent_id': None, 'sort': 2},
-            {'id': '2', 'parent_id': None, 'sort': 1},
-            {'id': '3', 'parent_id': '2', 'sort': 1},
-            {'id': '4', 'parent_id': '2', 'sort': 2},
-        ]
-        sorted_nodes = SiyuanApi._sort_nodes(nodes)
-        assert sorted_nodes == [
-            {'id': '2', 'parent_id': None, 'sort': 1},
-            {'id': '3', 'parent_id': '2', 'sort': 1},
-            {'id': '4', 'parent_id': '2', 'sort': 2},
-            {'id': '1', 'parent_id': None, 'sort': 2},
-        ]
-
-    def test_sorts_nodes_with_multiple_levels(self):
-        """
-        Note 2 has 1 child, and note 3 has 1 child
-        """
-        nodes = [
-            {'id': '1', 'parent_id': None, 'sort': 2},
-            {'id': '2', 'parent_id': None, 'sort': 1},
-            {'id': '3', 'parent_id': '2', 'sort': 1},
-            {'id': '4', 'parent_id': '3', 'sort': 1},
-        ]
-        sorted_nodes = SiyuanApi._sort_nodes(nodes)
-        assert sorted_nodes == [
-            {'id': '2', 'parent_id': None, 'sort': 1},
-            {'id': '3', 'parent_id': '2', 'sort': 1},
-            {'id': '4', 'parent_id': '3', 'sort': 1},
-            {'id': '1', 'parent_id': None, 'sort': 2},
-        ]
-
-    def test_sorts_nodes_with_same_sort_value(self):
-        """
-        Sorting nodes with the same sort value
-
-        This should not happen in practice, but just in case
-        it should not raise an error either
-        """
-        nodes = [
-            {'id': '1', 'parent_id': None, 'sort': 1},
-            {'id': '2', 'parent_id': None, 'sort': 1},
-        ]
-        sorted_nodes = SiyuanApi._sort_nodes(nodes)
-        assert sorted_nodes == [
-            {'id': '1', 'parent_id': None, 'sort': 1},
-            {'id': '2', 'parent_id': None, 'sort': 1},
-        ]
-
     async def test_retrieves_block_count(self, mocker):
         """
         Retrieves the block count from the database
@@ -166,34 +95,73 @@ class TestSiyuanApi:
         )
         assert result == [{'id': 'block1', 'updated': '20230101000000'}]
 
-    async def test_retrieves_blocks_by_note_id(self, mocker):
+    async def test_list_assets(self, mocker):
         """
-        Retrieve multiple blocks by note ID
+        List all assets with optional suffix filtering
         """
         mocker.patch.object(
             SiyuanApi,
-            '_raw_query',
-            return_value=[{'id': 'block1', 'parent_id': '', 'root_id': 'note1', 'sort': 1}]
-        )
-        mocker.patch.object(
-            SiyuanApi,
-            'get_count',
-            return_value=1
+            '_list_files_recursive',
+            return_value=['/data/assets/file1.mp3', '/data/assets/file2.wav']
         )
         api = SiyuanApi()
-        api._block_count = 1
-        result = await api.get_blocks_by_note('note1')
-        assert result == [{'id': 'block1', 'parent_id': '', 'root_id': 'note1', 'sort': 1}]
+        result = await api.list_assets(suffixes=['.mp3'])
+        assert result == ['file1.mp3']
 
-    async def test_retrieves_note_plaintext(self, mocker):
+    async def test_create_note(self, mocker):
         """
-        Retrieve the plaintext content of a note
+        Create a note in a notebook
         """
         mocker.patch.object(
             SiyuanApi,
-            'get_blocks_by_note',
-            return_value=[{'content': 'line1'}, {'content': 'line2'}]
+            '_raw_post',
+            return_value='note_id_123'
         )
         api = SiyuanApi()
-        result = await api.get_note_plaintext('note1')
-        assert result == 'line1\nline2'
+        result = await api.create_note(
+            notebook_id='notebook1',
+            path='/path/to/note',
+            markdown_content='# Title\nContent'
+        )
+        assert result == 'note_id_123'
+
+    async def test_insert_block(self, mocker):
+        """
+        Insert a block into a note
+        """
+        mocker.patch.object(
+            SiyuanApi,
+            '_raw_post',
+            return_value={'doOperations': {'id': 'block_id_123'}, 'undoOperations': None}
+        )
+        api = SiyuanApi()
+        result = await api.insert_block(
+            markdown_content='New block content',
+            parent_id='parent_block_id'
+        )
+        assert result == 'block_id_123'
+
+    async def test_set_block_attribute(self, mocker):
+        """
+        Set attributes for a block
+        """
+        mocker.patch.object(SiyuanApi, '_raw_post', return_value=None)
+        api = SiyuanApi()
+        await api.set_block_attribute(
+            block_id='block_id_123',
+            attributes={'key': 'value'}
+        )
+
+    async def test_download_asset(self, mocker):
+        """
+        Download an asset and store it as a temporary file
+        """
+        mock_response = mocker.Mock()
+        mock_response.headers = {'Content-Type': 'audio/mpeg'}
+        mock_response.content = b'fake audio content'
+        mocker.patch.object(SiyuanApi, '_raw_post', return_value=mock_response)
+
+        api = SiyuanApi()
+        async with api.download_asset('path/to/asset.mp3') as temp_file:
+            temp_file.seek(0)  # Ensure the file pointer is at the beginning
+            assert temp_file.read() == b'fake audio content'

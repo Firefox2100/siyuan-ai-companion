@@ -1,7 +1,7 @@
 """
 Main application entry point for the Siyuan AI Companion.
 
-In debug mode, run a Werkzeug server with CORS disabled.
+In debug mode, run a Hypercorn debug server with CORS disabled.
 DO NOT USE THIS IN PRODUCTION.
 """
 
@@ -11,7 +11,7 @@ from quart import Quart
 from quart_cors import cors
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from siyuan_ai_companion.consts import APP_CONFIG
+from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
 from siyuan_ai_companion.tasks import update_index
 from siyuan_ai_companion.views import asset_blueprint, openai_blueprint
 
@@ -40,6 +40,7 @@ def create_app(debug = False):
 
     @quart_app.before_serving
     async def startup():
+        LOGGER.info('Beginning application startup')
         # Start the scheduler when the app starts
         scheduler.start()
 
@@ -48,10 +49,13 @@ def create_app(debug = False):
             # Remove the timestamp file
             try:
                 os.remove('last_update')
+                LOGGER.info('Last update timestamp cleared, forcing index update')
             except FileNotFoundError:
                 pass
 
         await update_index()
+
+        LOGGER.info('Application startup complete. Ready to serve requests.')
 
     @quart_app.route('/health')
     async def health_check():

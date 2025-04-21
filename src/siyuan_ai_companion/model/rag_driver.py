@@ -29,15 +29,15 @@ class RagDriver:
     _selected_model: str = None
 
     def __init__(self):
-        if RagDriver.transformer is None:
+        if self.transformer is None:
             RagDriver.transformer = SentenceTransformer('all-MiniLM-L6-v2')
 
-        if RagDriver.client is None:
+        if self.client is None:
             RagDriver.client = QdrantClient(
                 location=APP_CONFIG.qdrant_location,
             )
 
-        if not RagDriver.client.collection_exists(APP_CONFIG.qdrant_collection_name):
+        if not self.client.collection_exists(APP_CONFIG.qdrant_collection_name):
             RagDriver.client.create_collection(
                 collection_name=APP_CONFIG.qdrant_collection_name,
                 vectors_config=VectorParams(
@@ -51,10 +51,10 @@ class RagDriver:
         """
         The currently selected model for tokenisation
         """
-        if RagDriver._selected_model is None:
-            RagDriver.selected_model = 'gpt-3.5-turbo'
+        if self._selected_model is None:
+            self.selected_model = 'gpt-3.5-turbo'
 
-        return RagDriver._selected_model
+        return self._selected_model
 
     @selected_model.setter
     def selected_model(self, model_name: str):
@@ -63,7 +63,7 @@ class RagDriver:
 
         :param model_name: The name of the model to use
         """
-        if model_name == RagDriver._selected_model:
+        if model_name == self._selected_model:
             # No need to set the model again
             return
 
@@ -85,9 +85,9 @@ class RagDriver:
         The currently selected tokeniser
         """
         if self.selected_model.startswith('gpt'):
-            return RagDriver._openai_tokenizer
+            return self._openai_tokenizer
 
-        return RagDriver._huggingface_tokenizer
+        return self._huggingface_tokenizer
 
     @staticmethod
     def _hash_id(note_id: str) -> int:
@@ -134,7 +134,15 @@ class RagDriver:
         all_levels = sorted(set(int(tok.tag[1]) for tok in tokens if tok.type == 'heading_open'))
         if not all_levels:
             # No headers found; fallback to paragraph split
-            return self._fallback_split(document, max_tokens)
+            split = self._fallback_split(document, max_tokens)
+
+            results = []
+            for b in matching_blocks:
+                for t in split:
+                    if b in t:
+                        results.append(t)
+
+            return results
 
         split_level = current_level or all_levels[0]
 
@@ -182,8 +190,16 @@ class RagDriver:
                     max_tokens,
                     current_level=deeper_levels[0]
                 )
-            else:
-                return self._fallback_split(document, max_tokens)
+
+            split = self._fallback_split(document, max_tokens)
+
+            results = []
+            for b in matching_blocks:
+                for t in split:
+                    if b in t:
+                        results.append(t)
+
+            return results
 
         # Match against relevant blocks
         results = []
@@ -483,7 +499,7 @@ class RagDriver:
 
         LOGGER.debug('Segments: %s', segments)
 
-        return segments
+        return segments[:limit * 2]
 
     async def build_prompt(self,
                            query: str,
