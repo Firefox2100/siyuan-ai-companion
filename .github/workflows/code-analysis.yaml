@@ -14,6 +14,8 @@ on:
 jobs:
   analysis:
     runs-on: ubuntu-latest
+    env:
+      QDRANT_LOCATION: ":memory:"
 
     steps:
     - name: Checkout repository
