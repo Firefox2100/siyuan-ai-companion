@@ -7,13 +7,14 @@ DO NOT USE THIS IN PRODUCTION.
 
 import os
 import logging
-from quart import Quart
+from quart import Quart, redirect, url_for
 from quart_cors import cors
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
 from siyuan_ai_companion.tasks import update_index
-from siyuan_ai_companion.views import asset_blueprint, openai_blueprint
+from siyuan_ai_companion.views import asset_blueprint, openai_blueprint, \
+    ui_blueprint
 
 
 def create_app(debug = False):
@@ -33,6 +34,7 @@ def create_app(debug = False):
 
     quart_app.register_blueprint(asset_blueprint, url_prefix='/assets')
     quart_app.register_blueprint(openai_blueprint, url_prefix='/openai')
+    quart_app.register_blueprint(ui_blueprint, url_prefix='/ui')
 
     # Initialize the scheduler
     scheduler = AsyncIOScheduler()
@@ -60,6 +62,13 @@ def create_app(debug = False):
     @quart_app.route('/health')
     async def health_check():
         return {'status': 'healthy'}
+
+    @quart_app.route('/')
+    async def redirect_to_ui():
+        """
+        Redirect to the main UI page.
+        """
+        return redirect(url_for('ui.serve_ui', filename='index.html'))
 
     return quart_app
 

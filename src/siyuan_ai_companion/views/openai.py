@@ -52,7 +52,7 @@ async def v1_chat_completion_rag():
             request_payload['messages'][i]['content'] = new_prompt
             break
 
-    target_url = urljoin(APP_CONFIG.openai_url, '/chat/completions')
+    target_url = urljoin(APP_CONFIG.openai_url, 'chat/completions')
     return await forward_request(target_url, request_payload)
 
 
@@ -65,7 +65,7 @@ async def v1_chat_completion_direct():
     The prompt in this endpoint is expected to be a list of messages.
     """
     request_payload = await request.get_json()
-    target_url = urljoin(APP_CONFIG.openai_url, '/chat/completions')
+    target_url = urljoin(APP_CONFIG.openai_url, 'chat/completions')
     return await forward_request(target_url, request_payload)
 
 
@@ -126,12 +126,12 @@ async def v1_embeddings():
     This uses the model embedding directly. No prompts injected
     """
     request_payload = await request.get_json()
-    target_url = urljoin(APP_CONFIG.openai_url, '/embeddings')
+    target_url = urljoin(APP_CONFIG.openai_url, 'embeddings')
     return await forward_request(target_url, request_payload)
 
 
-@openai_blueprint.route('/rag/v1//models', methods=['GET'])
-@openai_blueprint.route('/direct/v1//models', methods=['GET'])
+@openai_blueprint.route('/rag/v1/models', methods=['GET'])
+@openai_blueprint.route('/direct/v1/models', methods=['GET'])
 @token_required
 async def v1_models():
     """
@@ -139,7 +139,7 @@ async def v1_models():
 
     This endpoint returns a model list from the OpenAI API.
     """
-    target_url = urljoin(APP_CONFIG.openai_url, '/models')
+    target_url = urljoin(APP_CONFIG.openai_url, 'models')
     return await forward_request(target_url, None, method='GET')
 
 

@@ -76,8 +76,15 @@ class RagDriver:
             RagDriver._huggingface_tokenizer = None
         else:
             # Huggingface models
-            RagDriver._huggingface_tokenizer = AutoTokenizer.from_pretrained(model_name)
-            RagDriver._openai_tokenizer = None
+            try:
+                RagDriver._huggingface_tokenizer = AutoTokenizer.from_pretrained(model_name)
+                RagDriver._openai_tokenizer = None
+            except (ValueError, OSError):
+                # Model not recognized. Fallback to generic tokenizer
+                RagDriver._huggingface_tokenizer = AutoTokenizer.from_pretrained(
+                    'bert-base-uncased'
+                )
+                RagDriver._openai_tokenizer = None
 
     @property
     def tokenizer(self) -> PreTrainedTokenizerFast | tiktoken.Encoding:
