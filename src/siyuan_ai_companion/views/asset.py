@@ -24,7 +24,9 @@ async def get_assets():
 
         assets = await siyuan.list_assets(suffixes=suffixes)
 
-    return jsonify(assets)
+    return jsonify({
+        'assets': assets,
+    })
 
 
 @asset_blueprint.route('/audio', methods=['GET'])
@@ -37,10 +39,10 @@ async def get_audio_assets():
     async with SiyuanApi() as siyuan:
         audio_assets = await siyuan.list_assets(suffixes=['wav'])
         audio_blocks = await siyuan.get_audio_blocks(
-            audio_assets=audio_assets,
+            audio_names=audio_assets,
         )
         transcription_ids = await siyuan.get_audio_transcription_ids(
-            audio_ids=audio_blocks.values(),
+            audio_ids=list(audio_blocks.values()),
         )
 
         result = {}
@@ -51,7 +53,7 @@ async def get_audio_assets():
         return jsonify(result)
 
 
-@asset_blueprint.route('/transcribe', methods=['POST'])
+@asset_blueprint.route('/audio/transcribe', methods=['POST'])
 @token_required
 async def transcribe_asset_file():
     """

@@ -441,12 +441,12 @@ class SiyuanApi:
             },
         )
 
-        if response['undoOperations']:
+        if response[0]['undoOperations']:
             raise SiYuanApiError(
                 message='Operation failed'
             )
 
-        return response['doOperations']['id']
+        return response[0]['doOperations']['id']
 
     async def set_block_attribute(self,
                                   block_id: str,
