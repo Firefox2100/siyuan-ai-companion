@@ -132,7 +132,7 @@ class TestSiyuanApi:
         mocker.patch.object(
             SiyuanApi,
             '_raw_post',
-            return_value={'doOperations': {'id': 'block_id_123'}, 'undoOperations': None}
+            return_value=[{'doOperations': {'id': 'block_id_123'}, 'undoOperations': None}]
         )
         api = SiyuanApi()
         result = await api.insert_block(

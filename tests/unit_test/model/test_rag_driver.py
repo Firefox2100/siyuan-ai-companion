@@ -181,9 +181,10 @@ class TestRagDriver:
     def test_fallback_split(self, mocker):
         driver = RagDriver()
         mocker.patch.object(driver, '_estimate_tokens', side_effect=lambda x: len(x.split()))
+        driver._max_segment_tokens = 5
 
         document = "Paragraph 1\n\nParagraph 2\n\nParagraph 3"
-        segments = driver._fallback_split(document, max_tokens=5)
+        segments = driver._fallback_split(document)
         assert len(segments) == 2, segments
         assert "Paragraph 1" in segments[0]
         assert "Paragraph 2" in segments[0]

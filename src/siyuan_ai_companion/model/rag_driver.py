@@ -13,8 +13,10 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
+from siyuan_ai_companion.errors import RagDriverError
 from .siyuan_api import SiyuanApi
 
 
@@ -26,18 +28,19 @@ class RagDriver:
     client: QdrantClient = None
     _openai_tokenizer: tiktoken.Encoding | None = None
     _huggingface_tokenizer: PreTrainedTokenizerFast | None = None
-    _selected_model: str = None
+    _selected_model: str | None = None
+    _max_segment_tokens: int = 512
 
     def __init__(self):
-        if self.transformer is None:
+        if RagDriver.transformer is None:
             RagDriver.transformer = SentenceTransformer('all-MiniLM-L6-v2')
 
-        if self.client is None:
+        if RagDriver.client is None:
             RagDriver.client = QdrantClient(
                 location=APP_CONFIG.qdrant_location,
             )
 
-        if not self.client.collection_exists(APP_CONFIG.qdrant_collection_name):
+        if not RagDriver.client.collection_exists(APP_CONFIG.qdrant_collection_name):
             RagDriver.client.create_collection(
                 collection_name=APP_CONFIG.qdrant_collection_name,
                 vectors_config=VectorParams(
@@ -73,31 +76,60 @@ class RagDriver:
         if model_name.startswith('gpt'):
             # OpenAI models
             RagDriver._openai_tokenizer = tiktoken.encoding_for_model(model_name)
-            RagDriver._huggingface_tokenizer = None
+
+            LOGGER.info('Using OpenAI tokenizer')
         else:
             # Huggingface models
             try:
                 RagDriver._huggingface_tokenizer = AutoTokenizer.from_pretrained(model_name)
-                RagDriver._openai_tokenizer = None
+
+                LOGGER.info('Using Huggingface tokenizer')
             except (ValueError, OSError):
                 # Model not recognized. Fallback to generic tokenizer
                 RagDriver._huggingface_tokenizer = AutoTokenizer.from_pretrained(
                     'bert-base-uncased'
                 )
-                RagDriver._openai_tokenizer = None
+
+                LOGGER.warning('Model not recognized. Using generic tokenizer')
 
     @property
     def tokenizer(self) -> PreTrainedTokenizerFast | tiktoken.Encoding:
         """
         The currently selected tokeniser
+
+        It may return two different classes, but they both implement
+        the `.encode()` method, so can be used interchangeably
         """
         if self.selected_model.startswith('gpt'):
+            LOGGER.debug('Selecting OpenAI tokenizer')
             return self._openai_tokenizer
 
+        LOGGER.debug('Selecting Huggingface tokenizer')
         return self._huggingface_tokenizer
+
+    @property
+    def max_segment_tokens(self) -> int:
+        return self._max_segment_tokens
+
+    @max_segment_tokens.setter
+    def max_segment_tokens(self, max_tokens: int):
+        """
+        Set the maximum number of tokens for a segment
+        :param max_tokens: The maximum number of tokens
+        """
+        if max_tokens <= 0:
+            raise RagDriverError('max_tokens must be greater than 0')
+
+        RagDriver._max_segment_tokens = max_tokens
+        LOGGER.info('Set max segment tokens to %d', max_tokens)
 
     @staticmethod
     def _hash_id(note_id: str) -> int:
+        """
+        Hash the note ID to a 64-bit integer
+        :param note_id: The ID of the note, used in SiYuan
+        :return: The hashed ID, as a 64-bit integer
+        """
         return int.from_bytes(hashlib.md5(note_id.encode()).digest()[:8], 'big')
 
     def _estimate_tokens(self,
@@ -114,9 +146,7 @@ class RagDriver:
     def _segment_document(self,
                           document: str,
                           matching_blocks: list[str],
-                          max_tokens: int = 512,
-                          current_level: int = None,
-                          ) -> list[str]:
+                          current_level: int = None) -> list[str]:
         """
         Segment the document based on Markdown structure and the matching block
         from the vector index.
@@ -124,114 +154,161 @@ class RagDriver:
         :param document: The document to segment, in Markdown format
         :param matching_blocks: The block from Qdrant, which was used to fetch the full
                                 content of the note
-        :param max_tokens: The maximum number of tokens that can be used by the segment
         :param current_level: (internal) the Markdown heading level currently used for splitting
         :return: The segmented document, in Markdown format
         """
         if not matching_blocks:
-            raise ValueError('No matching blocks provided for segmentation')
+            LOGGER.error('No matching blocks provided for segmentation')
+            raise RagDriverError('No matching blocks provided for segmentation')
 
-        if self._estimate_tokens(passage=document) <= max_tokens:
+        if self._estimate_tokens(passage=document) <= self.max_segment_tokens:
+            LOGGER.debug('Document %s is small enough, no need to segment', document)
             return [document]
 
-        md = MarkdownIt()
-        tokens = md.parse(document)
+        LOGGER.debug('Segmenting document: %s', document)
 
-        # Extract heading levels
+        tokens = MarkdownIt().parse(document)
         all_levels = sorted(set(int(tok.tag[1]) for tok in tokens if tok.type == 'heading_open'))
+
         if not all_levels:
-            # No headers found; fallback to paragraph split
-            split = self._fallback_split(document, max_tokens)
-
-            results = []
-            for b in matching_blocks:
-                for t in split:
-                    if b in t:
-                        results.append(t)
-
-            return results
+            LOGGER.debug('No heading levels found in document, falling back to paragraph split')
+            return self._fallback_segment(document, matching_blocks)
 
         split_level = current_level or all_levels[0]
+        blocks = self._split_by_heading_level(tokens, split_level)
 
-        blocks = []
-        current_title = None
-        current_content = []
-
-        i = 0
-        while i < len(tokens):
-            tok = tokens[i]
-            if tok.type == 'heading_open' and int(tok.tag[1]) == split_level:
-                # Store previous block
-                if current_title or current_content:
-                    blocks.append(
-                        (
-                            current_title or '',
-                            ''.join(getattr(t, 'content', '')
-                                    for t in current_content).strip()
-                        )
-                    )
-                    current_content = []
-
-                current_title = tokens[i + 1].content if i + 1 < len(tokens) else ''
-                i += 2  # skip heading_open and inline
-            else:
-                current_content.append(tok)
-                i += 1
-
-        if current_title or current_content:
-            blocks.append(
-                (
-                    current_title or '',
-                    ''.join(getattr(t, 'content', '')
-                            for t in current_content).strip()
-                )
+        if len(blocks) == 1:
+            LOGGER.debug('Only one heading level found, try a deeper level split')
+            return self._try_deeper_split(
+                document=document,
+                matching_blocks=matching_blocks,
+                all_levels=all_levels,
+                current_level=split_level,
             )
 
-        # If only one block was produced, try a deeper header level
-        if len(blocks) == 1:
-            deeper_levels = [lvl for lvl in all_levels if lvl > split_level]
-            if deeper_levels:
-                return self._segment_document(
-                    document,
-                    matching_blocks,
-                    max_tokens,
-                    current_level=deeper_levels[0]
-                )
+        LOGGER.info('Splitting document by heading level %d', split_level)
+        LOGGER.debug('Blocks: %s', blocks)
 
-            split = self._fallback_split(document, max_tokens)
+        return self._match_blocks(blocks, matching_blocks, split_level)
 
-            results = []
-            for b in matching_blocks:
-                for t in split:
-                    if b in t:
-                        results.append(t)
+    def _split_by_heading_level(self,
+                                tokens: list[Token],
+                                split_level: int,
+                                ) -> list[tuple[str, str]]:
+        """
+        Split the document by heading level
 
-            return results
+        :param tokens: The tokens of the document, parsed by MarkdownIt
+        :param split_level: The heading level to split by
+        :return: A list of tuples, each containing the title and content
+        """
+        blocks = []
+        current_title = ''
+        current_content = []
 
-        # Match against relevant blocks
-        results = []
+        def flush_block():
+            if current_title or current_content:
+                blocks.append((current_title, self._tokens_to_text(current_content)))
+                current_content.clear()
 
-        for b in matching_blocks:
-            for title, text in blocks:
-                if b in title or b in text:
-                    if self._estimate_tokens(passage=text) > max_tokens:
-                        results.extend(
-                            self._segment_document(
-                                text,
-                                [b],
-                                max_tokens,
-                                current_level=split_level,
-                            )
+        for idx, tok in enumerate(tokens):
+            if tok.type == 'heading_open' and int(tok.tag[1]) == split_level:
+                flush_block()
+                if idx + 1 < len(tokens):
+                    current_title = tokens[idx + 1].content
+            else:
+                current_content.append(tok)
+
+        flush_block()
+        return blocks
+
+    @staticmethod
+    def _tokens_to_text(tokens: list[Token]) -> str:
+        """
+        Convert a list of tokens to text
+
+        :param tokens: The tokens to convert
+        :return: The text in Markdown format
+        """
+        return ''.join(getattr(t, 'content', '') for t in tokens).strip()
+
+    def _fallback_segment(self,
+                          document: str,
+                          matching_blocks: list[str],
+                          ) -> list[str]:
+        """
+        Fallback method for segmenting the document when no headers are found
+
+        :param document: The document to segment, in Markdown format
+        :param matching_blocks: The block from Qdrant, which was used to fetch the full
+                                content of the note
+        :return: The segmented document, in Markdown format
+        """
+        split = self._fallback_split(document)
+        matches = {t for b in matching_blocks for t in split if b in t}
+        return list(matches)
+
+    def _try_deeper_split(self,
+                          document: str,
+                          matching_blocks: list[str],
+                          all_levels: list[int],
+                          current_level: int,
+                          ) -> list[str]:
+        """
+        Try to split the document by a deeper heading level
+
+        :param document: The document to segment, in Markdown format
+        :param matching_blocks: The block from Qdrant, which was used to fetch the full
+        :param all_levels: The list of all heading levels found in the document
+        :param current_level: The current heading level used for splitting
+        :return: The segmented document, in Markdown format
+        """
+        deeper_levels = [lvl for lvl in all_levels if lvl > current_level]
+
+        if deeper_levels:
+            return self._segment_document(
+                document=document,
+                matching_blocks=matching_blocks,
+                current_level=deeper_levels[0],
+            )
+
+        return self._fallback_segment(document, matching_blocks)
+
+    def _match_blocks(self,
+                      blocks: list[tuple[str, str]],
+                      matching_blocks: list[str],
+                      current_level: int,
+                      ) -> list[str]:
+        """
+        Match the blocks with the matching blocks from Qdrant
+        :param blocks: The blocks to match, in Markdown format
+        :param matching_blocks: The block from Qdrant, which was used to fetch the full
+                                content of the note
+        :param current_level: The current heading level used for splitting
+        :return: The segmented document, in Markdown format
+        """
+        block_texts = []
+        matching_set = set(matching_blocks)
+
+        for title, text in blocks:
+            combined = f"{title}\n{text}"
+            if any(b in combined for b in matching_set):
+                if self._estimate_tokens(passage=text) > self.max_segment_tokens:
+                    block_texts.extend(
+                        self._segment_document(
+                            document=text,
+                            matching_blocks=[b for b in matching_blocks if b in combined],
+                            current_level=current_level,
                         )
-                    else:
-                        results.append(text)
+                    )
+                else:
+                    block_texts.append(text)
 
-        LOGGER.debug('Segmented document: %s', results)
-        return results
+        LOGGER.debug('Segmented document: %s', block_texts)
+        return block_texts
 
     def _fallback_split(self,
                         document: str,
-                        max_tokens: int,
                         ) -> list[str]:
         """
         Split a document by paragraph if no headers are usable.
@@ -239,15 +316,14 @@ class RagDriver:
         This is a fallback method for splitting the document
         when no headers are found or the document is too long to be accepted.
         :param document: The document to split
-        :param max_tokens: The maximum number of tokens that can be used by the segment
         """
         paragraphs = [p.strip() for p in document.split('\n\n') if p.strip()]
         segments = []
-        current = ""
+        current = ''
 
         for p in paragraphs:
-            tentative = current + "\n\n" + p if current else p
-            if self._estimate_tokens(tentative) <= max_tokens:
+            tentative = f"{current}\n\n{p}" if current else p
+            if self._estimate_tokens(tentative) <= self.max_segment_tokens:
                 current = tentative
             else:
                 if current:
@@ -271,7 +347,6 @@ class RagDriver:
         :param document_id: The ID of the document containing the block, used in SiYuan
         :param block_content: The content of the block, plain text
                               with Markdown stripped
-        :return: None
         """
         vector = self.transformer.encode(
             sentences=block_content,
@@ -452,14 +527,12 @@ class RagDriver:
     async def get_context(self,
                           query: str,
                           limit: int = 3,
-                          max_tokens: int = 512,
                           ) -> list[str]:
         """
         Get the context for the given query
 
         :param query: The user message
         :param limit: The number of search results to use
-        :param max_tokens: The maximum number of tokens that can be used by the segment
         :return: The context, in Markdown format
         """
         LOGGER.debug('Getting context for: %s', query)
@@ -499,7 +572,6 @@ class RagDriver:
             segments.extend(self._segment_document(
                 document=notes[i],
                 matching_blocks=matching_blocks,
-                max_tokens=max_tokens,
             ))
 
         segments = list(set(segments))
@@ -511,7 +583,6 @@ class RagDriver:
     async def build_prompt(self,
                            query: str,
                            limit: int = 3,
-                           max_tokens: int = 512,
                            ) -> str:
         """
         Construct the prompt using the search results
@@ -521,13 +592,11 @@ class RagDriver:
 
         :param query: The user message
         :param limit: The number of search results to use
-        :param max_tokens: The maximum number of tokens that can be used by the segment
         :return: The prompt, added with the search results
         """
         contexts = await self.get_context(
             query=query,
             limit=limit,
-            max_tokens=max_tokens,
         )
 
         prompt = 'Additional context:\n\n'

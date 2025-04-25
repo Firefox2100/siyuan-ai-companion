@@ -13,8 +13,9 @@ from tempfile import NamedTemporaryFile
 from datetime import datetime
 from httpx import AsyncClient, Response
 
-from siyuan_ai_companion.consts import APP_CONFIG
-from siyuan_ai_companion.errors import SiYuanApiError
+from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
+from siyuan_ai_companion.errors import SiYuanApiError, SiYuanFileListError, \
+    SiYuanBlockNotFoundError
 
 
 class SiyuanApi:
@@ -67,6 +68,8 @@ class SiyuanApi:
         as this will close the client and it will not be
         usable any more.
         """
+        LOGGER.debug('Closing SiYuan API client')
+
         await self._client.aclose()
 
     async def _raw_post(self,
@@ -81,28 +84,59 @@ class SiyuanApi:
         :param response_is_json: If the response is JSON format
         :return: A dictionary if the response is JSON format,
                  or the raw response
-        :raises: SiYuanApiError
+        :raises SiYuanApiError: If the request fails
         """
+        LOGGER.debug('POST %s with payload %s', url, payload)
+
         response = await self._client.post(
             url=url,
             json=payload,
         )
 
         if response.status_code != 200:
+            LOGGER.error(
+                'POST %s with payload %s failed with status code %d',
+                url,
+                payload,
+                response.status_code,
+            )
+
             raise SiYuanApiError(
-                message='Failed to execute SQL query',
+                message='Failed to communicate with SiYuan server',
                 status_code=response.status_code,
             )
 
         if response_is_json:
             if response.json().get('code') != 0:
+                LOGGER.error(
+                    'POST %s with payload %s failed with error: %s',
+                    url,
+                    payload,
+                    response.json()['msg'],
+                )
+
                 raise SiYuanApiError(
                     message=response.json()['msg'],
                     status_code=response.status_code,
                 )
 
             data = response.json()
+
+            LOGGER.debug(
+                'POST %s with payload %s returned data: %s',
+                url,
+                payload,
+                data,
+            )
+
             return data['data']
+
+        # If the response is not JSON, return the raw response
+        LOGGER.debug(
+            'POST %s with payload %s returned raw response',
+            url,
+            payload,
+        )
 
         return response
 
@@ -114,6 +148,7 @@ class SiyuanApi:
 
         :param sql_query: The SQL query to execute
         :return: The data response from the SiYuan server
+        :raises SiYuanApiError: If the request fails
         """
         return await self._raw_post(
             url='/api/query/sql',
@@ -129,6 +164,10 @@ class SiyuanApi:
         List all assets in a given path recursively
         :param path: The path to begin the search
         :return: All files under the path, including children dirs
+        :raises SiYuanFileListError: If the request format is unexpected.
+            Usually this means the path is invalid, or there's a racing
+            condition with the SiYuan server.
+        :raises SiYuanApiError: If the request fails
         """
         if path != '/':
             path = path.rstrip('/')
@@ -144,7 +183,12 @@ class SiyuanApi:
 
         for item in response:
             if not isinstance(item, dict):
-                raise SiYuanApiError(
+                LOGGER.error(
+                    'Unexpected response type from API: %s',
+                    type(item),
+                )
+
+                raise SiYuanFileListError(
                     message='Unexpected response type from API',
                 )
 
@@ -160,17 +204,25 @@ class SiyuanApi:
                 # It's a file, add it to the list
                 files.append(item_path)
 
+        LOGGER.info('Listed %d files in %s', len(files), path)
+        LOGGER.debug('Listed files in %s: %s', path, files)
+
         return files
 
     async def get_count(self) -> int:
         """
         Get the number of blocks in the database
+        :return: The number of blocks in the database
+        :raises SiYuanApiError: If the request fails
         """
         payload = await self._raw_query(
             sql_query="SELECT COUNT(*) FROM blocks",
         )
 
         self._block_count = int(payload[0]['COUNT(*)'])
+
+        LOGGER.info('Counted %d blocks', self._block_count)
+
         return self._block_count
 
     async def get_block(self,
@@ -180,10 +232,24 @@ class SiyuanApi:
         Get a block by its ID
 
         :param block_id: The ID of the block, used in SiYuan
+        :return: The block data
+        :raises SiYuanBlockNotFoundError: If the block is not found
+        :raises SiYuanApiError: If the request fails
         """
         payload = await self._raw_query(
             sql_query=f"SELECT * FROM blocks WHERE id='{block_id}'",
         )
+
+        if not payload:
+            LOGGER.error('Block not found: %s', block_id)
+
+            raise SiYuanBlockNotFoundError(
+                message='Block not found',
+                status_code=404,
+            )
+
+        LOGGER.info('Block found for ID %s', block_id)
+        LOGGER.debug('Block found: %s', payload[0])
 
         return payload[0] if payload else None
 
@@ -196,6 +262,8 @@ class SiyuanApi:
         :param audio_name: The file name of the audio asset, as it is
                            on the file system
         :return: The audio block ID
+        :raises SiYuanBlockNotFoundError: If the block is not found
+        :raises SiYuanApiError: If the request fails
         """
         payload = await self._raw_query(
             sql_query=f"SELECT * FROM blocks "
@@ -203,10 +271,13 @@ class SiyuanApi:
         )
 
         if not payload:
-            raise SiYuanApiError(
+            raise SiYuanBlockNotFoundError(
                 message='Audio block not found',
                 status_code=404,
             )
+
+        LOGGER.info('Audio block found for name %s', audio_name)
+        LOGGER.debug('Audio block found: %s', payload[0])
 
         # Find the first occasion in case the audio is inserted more than once
         return payload[0]['id']
@@ -216,10 +287,14 @@ class SiyuanApi:
                                ) -> dict[str, str]:
         """
         Get audio blocks by the file names of the audio assets
+
+        If the audio asset is not inserted into a block, it will not appear
+        in the results.
         :param audio_names: The file names of the audio assets, as they are
                             on the file system
         :return: A dictionary mapping the audio file name to the
                  audio block ID
+        :raises SiYuanApiError: If the request fails
         """
         audio_names = deepcopy(audio_names)
         response = await self._raw_query(
@@ -234,6 +309,9 @@ class SiyuanApi:
                     audio_blocks[audio_name] = block['id']
                     audio_names.remove(audio_name)
 
+        LOGGER.info('Audio blocks found for names %s', audio_names)
+        LOGGER.debug('Audio blocks found: %s', audio_blocks)
+
         return audio_blocks
 
     async def get_audio_transcription_id(self,
@@ -241,18 +319,25 @@ class SiyuanApi:
                                          ) -> str:
         """
         Get the block marking the beginning of the transcription for an audio block
+
         :param audio_id: The audio block ID
         :return: The beginning (usually title) of the transcription block ID
+        :raises SiYuanBlockNotFoundError: If the block is not found
+        :raises SiYuanApiError: If the request fails
         """
         response = await self._raw_query(
             sql_query=f"SELECT * FROM blocks WHERE alias LIKE '%transcription-{audio_id}%'"
         )
 
         if not response:
-            raise SiYuanApiError(
+            LOGGER.error('Transcription block not found for audio ID %s', audio_id)
+            raise SiYuanBlockNotFoundError(
                 message='Transcription block not found',
                 status_code=404,
             )
+
+        LOGGER.info('Transcription block found for audio ID %s', audio_id)
+        LOGGER.debug('Transcription block found: %s', response[0])
 
         return response[0]['id']
 
@@ -261,9 +346,11 @@ class SiyuanApi:
                                           ) -> dict[str, str]:
         """
         Get the transcript block ids for multiple audio blocks
+
         :param audio_ids: The audio block IDs
         :return: A dictionary mapping the audio block ID to the
                  transcription block ID
+        :raises SiYuanApiError: If the request fails
         """
         audio_ids = deepcopy(audio_ids)
         response = await self._raw_query(
@@ -283,6 +370,9 @@ class SiyuanApi:
                     transcription_ids[audio_id] = block['id']
                     audio_ids.remove(audio_id)
 
+        LOGGER.info('Transcription blocks found for audio IDs %s', audio_ids)
+        LOGGER.debug('Transcription blocks found: %s', transcription_ids)
+
         return transcription_ids
 
     async def get_blocks_by_time(self,
@@ -294,6 +384,7 @@ class SiyuanApi:
         :param updated_after: The time to filter by. If left empty,
                               all blocks will be returned.
         :return: A list of blocks updated after the given time
+        :raises SiYuanApiError: If the request fails
         """
         if updated_after is None:
             updated_after = datetime.fromtimestamp(0)
@@ -308,6 +399,9 @@ class SiyuanApi:
                       f"LIMIT {self._block_count}",
         )
 
+        LOGGER.info('%s blocks updated after %s', len(payload), updated_after_str)
+        LOGGER.debug('Blocks updated after %s: %s', updated_after_str, payload)
+
         return payload
 
     async def get_note_markdown(self,
@@ -318,6 +412,7 @@ class SiyuanApi:
 
         :param note_id: The ID of the note, used in SiYuan
         :return: The Markdown version of the note
+        :raises SiYuanApiError: If the request fails
         """
         data = await self._raw_post(
             url='/api/lute/copyStdMarkdown',
@@ -326,17 +421,21 @@ class SiyuanApi:
             },
         )
 
+        LOGGER.info('Markdown content of note %s retrieved', note_id)
+        LOGGER.debug('Markdown content of note %s: %s', note_id, data)
+
         return data
 
     @asynccontextmanager
     async def download_asset(self,
                              asset_path: str,
-                             ) -> AsyncIterator[NamedTemporaryFile]:
+                             ) -> AsyncIterator:
         """
         Download an asset from the SiYuan server
         and store it as a temporary file
         :param asset_path: The asset relative path to '/data/assets'
         :return: The file like object of the downloaded asset
+        :raises SiYuanApiError: If the request fails
         """
         response = await self._raw_post(
             url='/api/file/getFile',
@@ -355,6 +454,8 @@ class SiyuanApi:
             temp_file.write(response.content)
             temp_file.flush()
 
+            LOGGER.info('Downloaded asset %s to %s', asset_path, temp_file.name)
+
             yield temp_file
 
     async def list_assets(self,
@@ -365,6 +466,10 @@ class SiyuanApi:
         :param suffixes: A list of file suffixes to filter by
                          (e.g. ['.mp3', '.wav'])
         :return: A list of asset paths
+        :raises SiYuanFileListError: If the request format is unexpected.
+            Usually this means the path is invalid, or there's a racing
+            condition with the SiYuan server.
+        :raises SiYuanApiError: If the request fails
         """
         assets = await self._list_files_recursive(
             path='/data/assets',
@@ -378,6 +483,9 @@ class SiyuanApi:
 
         # Remove the leading '/data/assets/' from the path
         assets = [asset.replace('/data/assets/', '') for asset in assets]
+
+        LOGGER.info('Listed %d assets', len(assets))
+        LOGGER.debug('Assets listed: %s', assets)
 
         return assets
 
@@ -394,6 +502,7 @@ class SiyuanApi:
                      be the note title.
         :param markdown_content: The content of the note in Markdown format
         :return: The ID of newly created note
+        :raises SiYuanApiError: If the request fails
         """
         response = await self._raw_post(
             url='/api/filetree/createDoc',
@@ -403,6 +512,8 @@ class SiyuanApi:
                 'markdown': markdown_content,
             },
         )
+
+        LOGGER.info('Note created in path %s', path)
 
         return response
 
@@ -424,6 +535,7 @@ class SiyuanApi:
         :param parent_id: The ID of the parent block. The new block will be placed
             at the last of its children
         :return: The ID of the block created
+        :raises SiYuanApiError: If the request fails
         """
         if not next_id and not previous_id and not parent_id:
             raise SiYuanApiError(
@@ -441,10 +553,28 @@ class SiyuanApi:
             },
         )
 
+        if not isinstance(response, list):
+            LOGGER.error(
+                'Unexpected response type from API: %s',
+                type(response),
+            )
+
+            raise SiYuanApiError(
+                message='Unexpected response type from API',
+            )
+
         if response[0]['undoOperations']:
+            LOGGER.error(
+                'Failed to insert block: %s',
+                response[0]['undoOperations'],
+            )
+
             raise SiYuanApiError(
                 message='Operation failed'
             )
+
+        LOGGER.info('Block inserted')
+        LOGGER.debug('Block inserted: %s', response[0])
 
         return response[0]['doOperations']['id']
 
@@ -457,7 +587,7 @@ class SiyuanApi:
 
         :param block_id: The ID of the block to set attributes for
         :param attributes: A dictionary of attributes to set for the block
-        :return:
+        :raises SiYuanApiError: If the request fails
         """
         await self._raw_post(
             url='/api/attr/setBlockAttrs',
@@ -466,3 +596,5 @@ class SiyuanApi:
                 'attrs': attributes,
             }
         )
+
+        LOGGER.info('Block attributes set for block %s', block_id)

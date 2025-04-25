@@ -20,3 +20,20 @@ class SiYuanApiError(SiYuanAiCompanionError):
     """
     Error calling SiYuan API.
     """
+
+
+class SiYuanFileListError(SiYuanApiError):
+    """
+    Error listing files in from SiYuan server.
+    """
+
+
+class SiYuanBlockNotFoundError(SiYuanApiError):
+    """
+    Error when a block is not found.
+    """
+
+class RagDriverError(SiYuanAiCompanionError):
+    """
+    Base class for all exceptions raised by the RAG driver.
+    """
