@@ -61,7 +61,12 @@ def create_app(debug = False):
 
     @quart_app.route('/health')
     async def health_check():
-        return {'status': 'healthy'}
+        key_required = APP_CONFIG.companion_token is not None
+
+        return {
+            'status': 'healthy',
+            'apiKeyRequired': key_required,
+        }
 
     @quart_app.route('/')
     async def redirect_to_ui():

@@ -9,6 +9,7 @@ import re
 from copy import deepcopy
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from asyncio import Lock
 from tempfile import NamedTemporaryFile
 from datetime import datetime
 from httpx import AsyncClient, Response
@@ -22,6 +23,9 @@ class SiyuanApi:
     """
     SiYuan API client
     """
+    _processing_assets: set[str] = set()
+    _asset_lock = Lock()
+
     def __init__(self,
                  url: str = None,
                  token: str = None,
@@ -71,6 +75,52 @@ class SiyuanApi:
         LOGGER.debug('Closing SiYuan API client')
 
         await self._client.aclose()
+
+    @classmethod
+    async def add_to_processing(cls,
+                                asset_path: str,
+                                ):
+        """
+        Add an asset to the processing list
+        :param asset_path: The path of the asset being processed
+        """
+        async with cls._asset_lock:
+            if asset_path in cls._processing_assets:
+                LOGGER.debug('Asset %s is already being processed', asset_path)
+                return
+
+            cls._processing_assets.add(asset_path)
+            LOGGER.debug('Added asset %s to processing list', asset_path)
+
+    @classmethod
+    async def remove_from_processing(cls,
+                                     asset_path: str,
+                                     ):
+        """
+        Remove an asset from the processing list
+        :param asset_path: The path of the asset being processed
+        """
+        async with cls._asset_lock:
+            if asset_path not in cls._processing_assets:
+                LOGGER.debug('Asset %s is not in processing list', asset_path)
+                return
+
+            cls._processing_assets.remove(asset_path)
+            LOGGER.debug('Removed asset %s from processing list', asset_path)
+
+    @classmethod
+    async def is_processing(cls,
+                            asset_path: str,
+                            ) -> bool:
+        """
+        Check if an asset is being processed
+        :param asset_path: The path of the asset being processed
+        :return: True if the asset is being processed, False otherwise
+        """
+        async with cls._asset_lock:
+            is_processing = asset_path in cls._processing_assets
+            LOGGER.debug('Asset %s is being processed: %s', asset_path, is_processing)
+            return is_processing
 
     async def _raw_post(self,
                         url: str,
@@ -233,7 +283,6 @@ class SiyuanApi:
 
         :param block_id: The ID of the block, used in SiYuan
         :return: The block data
-        :raises SiYuanBlockNotFoundError: If the block is not found
         :raises SiYuanApiError: If the request fails
         """
         payload = await self._raw_query(
@@ -241,17 +290,13 @@ class SiyuanApi:
         )
 
         if not payload:
-            LOGGER.error('Block not found: %s', block_id)
-
-            raise SiYuanBlockNotFoundError(
-                message='Block not found',
-                status_code=404,
-            )
+            LOGGER.warn('Block not found: %s', block_id)
+            return None
 
         LOGGER.info('Block found for ID %s', block_id)
         LOGGER.debug('Block found: %s', payload[0])
 
-        return payload[0] if payload else None
+        return payload[0]
 
     async def get_audio_block(self,
                               audio_name: str,
@@ -372,6 +417,18 @@ class SiyuanApi:
 
         LOGGER.info('Transcription blocks found for audio IDs %s', audio_ids)
         LOGGER.debug('Transcription blocks found: %s', transcription_ids)
+
+        # Add the processing audio IDs to the transcription IDs
+        async with self._asset_lock:
+            processing_paths = list(self._processing_assets)
+
+        processing_ids = await self.get_audio_blocks(
+            audio_names=processing_paths,
+        )
+
+        for audio_name, audio_id in processing_ids.items():
+            if audio_id in transcription_ids:
+                transcription_ids[audio_name] = 'Processing'
 
         return transcription_ids
 

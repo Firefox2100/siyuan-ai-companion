@@ -10,13 +10,14 @@ from faster_whisper import WhisperModel
 from faster_whisper.transcribe import Segment
 from pyannote.audio import Pipeline
 
-from siyuan_ai_companion.consts import APP_CONFIG
+from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
 from .siyuan_api import SiyuanApi
 
 
 def _transcribe(audio_path) -> list[Segment]:
     """
     Transcribe an audio file using the Whisper model.
+
     :param audio_path: The absolute path to the audio file.
     :return: A list of Segment objects, containing the start time,
              end time, and text.
@@ -38,6 +39,7 @@ def _transcribe(audio_path) -> list[Segment]:
 def _diarise(audio_path):
     """
     Diarise an audio file using the pyannote speaker diarization pipeline.
+
     :param audio_path: The absolute path to the audio file.
     :return: A PipelineOutput object containing the result
     """
@@ -58,6 +60,9 @@ class Transcriber:
     def whisper_model(self) -> WhisperModel:
         """
         Get the whisper model.
+
+        This getter always reloads the model to remain compatible
+        with multiprocessing functions.
         :return: WhisperModel object.
         """
         wm = WhisperModel(
@@ -71,6 +76,9 @@ class Transcriber:
     def pipeline(self) -> Pipeline:
         """
         Get the diarisation pipeline.
+
+        This getter always reloads the model to remain compatible
+        with multiprocessing functions.
         :return: A Pipeline object.
         """
         pipeline = Pipeline.from_pretrained(
@@ -209,7 +217,13 @@ class Transcriber:
                             the notebook
         """
         async with SiyuanApi() as siyuan:
+            if await siyuan.is_processing(asset_path):
+                LOGGER.warning('Asset %s is already being processed', asset_path)
+                return
+
             async with siyuan.download_asset(asset_path) as audio_file:
+                await siyuan.add_to_processing(asset_path)
+
                 audio_path = os.path.abspath(audio_file.name)
 
                 results = await self._transcribe_and_diarise_file(
@@ -264,3 +278,5 @@ class Transcriber:
                     'alias': f'transcription-{audio_block_id}',
                 },
             )
+
+            await siyuan.remove_from_processing(asset_path)
