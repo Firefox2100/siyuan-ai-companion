@@ -26,7 +26,7 @@ RUN chown appuser:appgroup /app
 # Copy source code and configuration files, then change ownership
 COPY . /app/siyuan-ai-companion
 
-RUN python -m pip install --no-cache-dir --constraint constraints.txt /app/siyuan-ai-companion[hypercorn] \
+RUN python -m pip install --no-cache-dir --constraint /app/siyuan-ai-companion/constraints.txt /app/siyuan-ai-companion[hypercorn] \
   && chown -R appuser:appgroup /app
 
 # Switch to the non-root user
