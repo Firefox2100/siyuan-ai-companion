@@ -1,3 +1,11 @@
+"""
+Blueprint definition to serve the UI from data files.
+
+The error handler does not capture the errors of these endpoints.
+This is because the browser is more used to normal HTTP errors and
+error pages.
+"""
+
 import importlib.resources as pkg_resources
 from pathlib import Path
 from quart import Blueprint, send_from_directory, redirect, url_for

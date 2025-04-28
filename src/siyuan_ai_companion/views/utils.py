@@ -7,7 +7,17 @@ from copy import deepcopy
 from quart import Response, request, jsonify
 import httpx
 
-from siyuan_ai_companion.consts import APP_CONFIG
+from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
+from siyuan_ai_companion.errors import SiYuanAiCompanionError
+
+
+class CompanionEndpointHandlerError(SiYuanAiCompanionError):
+    """
+    Custom error class for handling errors in the request handler.
+    """
+    def __init__(self, message: str, status_code: int = 500):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 async def forward_request(url: str,
@@ -77,5 +87,23 @@ def token_required(f):
             return jsonify({'error': 'Invalid companion token'}), 401
 
         return await f(*args, **kwargs)
+
+    return decorated
+
+
+def error_handler(f):
+    """
+    A wrapper function to handle errors in the request handler
+    """
+    @wraps(f)
+    async def decorated(*args, **kwargs):
+        try:
+            return await f(*args, **kwargs)
+        except SiYuanAiCompanionError as e:
+            LOGGER.error('Error: %s', e.message)
+            return jsonify({'error': e.message}), e.status_code
+        except Exception as e:
+            LOGGER.error('Unexpected error: %s', str(e))
+            return jsonify({'error': str(e)}), 500
 
     return decorated

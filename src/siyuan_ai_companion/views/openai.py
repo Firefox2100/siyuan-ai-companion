@@ -9,13 +9,15 @@ from quart import Blueprint, Response, request, jsonify, stream_with_context
 
 from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
 from siyuan_ai_companion.model import RagDriver, Transcriber
-from .utils import token_required, forward_request
+from .utils import CompanionEndpointHandlerError, token_required, forward_request, \
+    error_handler
 
 
 openai_blueprint = Blueprint('openai', __name__)
 
 
 @openai_blueprint.route('/rag/v1/chat/completions', methods=['POST'])
+@error_handler
 @token_required
 async def v1_chat_completion_rag():
     """
@@ -30,6 +32,7 @@ async def v1_chat_completion_rag():
     if 'tokenizerModel' in request_payload:
         # Using a third-party model runner like ollama, which does not
         # correspond to huggingface models
+        LOGGER.debug('Tokenizer model override: %s', request_payload['tokenizerModel'])
         chat_model = request_payload.pop('tokenizerModel')
     else:
         chat_model = request_payload.get('model')
@@ -40,7 +43,7 @@ async def v1_chat_completion_rag():
             break
 
     if not user_message:
-        return jsonify({'error': 'No user message provided'}), 400
+        raise CompanionEndpointHandlerError('No user message provided', 400)
 
     rag_driver = RagDriver()
     rag_driver.selected_model = chat_model
@@ -59,6 +62,7 @@ async def v1_chat_completion_rag():
 
 
 @openai_blueprint.route('/direct/v1/chat/completions', methods=['POST'])
+@error_handler
 @token_required
 async def v1_chat_completion_direct():
     """
@@ -72,6 +76,7 @@ async def v1_chat_completion_direct():
 
 
 @openai_blueprint.route('/rag/v1/completions', methods=['POST'])
+@error_handler
 @token_required
 async def v1_completions_rag():
     """
@@ -84,11 +89,12 @@ async def v1_completions_rag():
 
     prompt = request_payload.get('prompt')
     if not prompt:
-        return jsonify({'error': 'No prompt provided'}), 400
+        raise CompanionEndpointHandlerError('No prompt provided', 400)
 
     if 'tokenizerModel' in request_payload:
         # Using a third-party model runner like ollama, which does not
         # correspond to huggingface models
+        LOGGER.debug('Tokenizer model override: %s', request_payload['tokenizerModel'])
         chat_model = request_payload.pop('tokenizerModel')
     else:
         chat_model = request_payload.get('model')
@@ -156,7 +162,7 @@ async def v1_retrieve():
     chat_model = request_payload.get('model')
 
     if not user_message:
-        return jsonify({'error': 'No user message provided'}), 400
+        raise CompanionEndpointHandlerError('No user message provided', 400)
 
     rag_driver = RagDriver()
     rag_driver.selected_model = chat_model
@@ -176,7 +182,7 @@ async def v1_transcribe():
     request_files = await request.files
 
     if 'file' not in request_files:
-        return jsonify({'error': 'No file part in the request'}), 400
+        raise CompanionEndpointHandlerError('No file part in the request', 400)
 
     file = request_files['file']
     if file.filename == '':
@@ -197,8 +203,10 @@ async def v1_transcribe():
                     text = await asyncio.wait_for(async_generator.__anext__(), timeout=60)
                     yield text
                 except asyncio.TimeoutError:
-                    LOGGER.debug('Timeout while waiting for transcription chunk')
-                    break
+                    raise CompanionEndpointHandlerError(
+                        'Timeout while waiting for transcription chunk',
+                        408,
+                    )
                 except StopAsyncIteration:
                     break
         finally:

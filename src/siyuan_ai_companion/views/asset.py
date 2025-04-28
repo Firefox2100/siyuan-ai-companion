@@ -6,13 +6,14 @@ import asyncio
 from quart import Blueprint, request, jsonify
 
 from siyuan_ai_companion.model import Transcriber, SiyuanApi
-from .utils import token_required
+from .utils import token_required, error_handler
 
 
 asset_blueprint = Blueprint('transcribe', __name__)
 
 
 @asset_blueprint.route('/', methods=['GET'])
+@error_handler
 @token_required
 async def get_assets():
     """
@@ -30,6 +31,7 @@ async def get_assets():
 
 
 @asset_blueprint.route('/audio', methods=['GET'])
+@error_handler
 @token_required
 async def get_audio_assets():
     """
@@ -54,6 +56,7 @@ async def get_audio_assets():
 
 
 @asset_blueprint.route('/audio/transcribe', methods=['POST'])
+@error_handler
 @token_required
 async def transcribe_asset_file():
     """
