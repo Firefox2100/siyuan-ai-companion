@@ -658,3 +658,26 @@ class SiyuanApi:
         )
 
         LOGGER.info('Block attributes set for block %s', block_id)
+
+    async def list_notebooks(self) -> list[dict[str, str]]:
+        """
+        List all notebooks in the SiYuan server
+
+        :return: A list containing the details of all notebooks
+        """
+        response = await self._raw_post(
+            '/api/notebook/lsNotebooks'
+        )
+
+        # Remove the closed ones
+        response['notebooks'] = [
+            notebook for notebook in response['notebooks']
+            if not notebook['closed']
+        ]
+
+        # Sort the notebooks
+        response['notebooks'] = sorted(response['notebooks'], key=lambda x: x['sort'])
+        LOGGER.info('Listed %d notebooks', len(response['notebooks']))
+        LOGGER.debug('Notebooks listed: %s', response['notebooks'])
+
+        return response['notebooks']
