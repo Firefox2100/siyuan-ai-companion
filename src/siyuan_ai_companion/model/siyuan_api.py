@@ -47,6 +47,9 @@ class SiyuanApi:
 
         headers = None
         if self.token is not None:
+            LOGGER.info('Authentication for SiYuan API enabled')
+            LOGGER.debug('Token: %s', self.token)
+
             headers = {
                 'Authorization': f'Token {self.token}'
             }

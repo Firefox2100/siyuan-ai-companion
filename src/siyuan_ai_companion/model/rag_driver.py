@@ -33,14 +33,20 @@ class RagDriver:
 
     def __init__(self):
         if RagDriver.transformer is None:
+            LOGGER.info('Using transformer model: all-MiniLM-L6-v2')
+
             RagDriver.transformer = SentenceTransformer('all-MiniLM-L6-v2')
 
         if RagDriver.client is None:
+            LOGGER.info('Connecting to Qdrant at %s', APP_CONFIG.qdrant_location)
+
             RagDriver.client = QdrantClient(
                 location=APP_CONFIG.qdrant_location,
             )
 
         if not RagDriver.client.collection_exists(APP_CONFIG.qdrant_collection_name):
+            LOGGER.info('Creating collection %s', APP_CONFIG.qdrant_collection_name)
+
             RagDriver.client.create_collection(
                 collection_name=APP_CONFIG.qdrant_collection_name,
                 vectors_config=VectorParams(

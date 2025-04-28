@@ -26,6 +26,8 @@ def _transcribe(audio_path) -> list[Segment]:
     transcriber = Transcriber()
     model = transcriber.whisper_model
 
+    LOGGER.info('Transcribing %s', audio_path)
+
     segments_iter, _ = model.transcribe(
         audio_path,
         language='en',
@@ -33,6 +35,8 @@ def _transcribe(audio_path) -> list[Segment]:
 
     # Segments are lazy-processed, so load everything into a list
     segments = list(segments_iter)
+
+    LOGGER.info('Transcription finished for %s', audio_path)
 
     return segments
 
@@ -47,7 +51,11 @@ def _diarise(audio_path):
     transcriber = Transcriber()
     pipeline = transcriber.pipeline
 
+    LOGGER.info('Diarising %s', audio_path)
+
     diarisation = pipeline(audio_path)
+
+    LOGGER.info('Diarisation finished for %s', audio_path)
 
     return diarisation
 

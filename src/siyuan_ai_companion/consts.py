@@ -93,3 +93,6 @@ if not LOGGER.hasHandlers():
 
     # Add the handler to the logger
     LOGGER.addHandler(console_handler)
+
+
+LOGGER.debug('Application configuration: %s', APP_CONFIG.model_dump_json(indent=2))
