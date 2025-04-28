@@ -31,9 +31,6 @@ COPY . /app/siyuan-ai-companion
 RUN python -m pip install --no-cache-dir /app/siyuan-ai-companion[hypercorn] \
   && chown -R appuser:appgroup /app
 
-# Use an anonymous volume to persist cache data
-VOLUME ["/app/cache"]
-
 # Switch to the non-root user
 USER appuser
 

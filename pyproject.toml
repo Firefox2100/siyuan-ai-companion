@@ -53,11 +53,14 @@ Homepage = "https://github.com/Firefox2100/siyuan-ai-companion"
 Repository = "https://github.com/Firefox2100/siyuan-ai-companion.git"
 Issues = "https://github.com/Firefox2100/siyuan-ai-companion/issues"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.setuptools.dynamic]
 version = {attr = "siyuan_ai_companion.__version__"}
 
 [tool.setuptools.package-data]
-siyuan_ai_companion = ["data/*"]
+siyuan_ai_companion = ["data/*", "data/**/*"]
 
 [tool.pylint.main]
 clear-cache-post-run = true
