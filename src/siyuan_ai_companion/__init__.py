@@ -5,4 +5,4 @@ A companion service to use SiYuan note as a knowledge base
 for OpenAI compatible AI services.
 """
 
-__version__ = '1.3.0'
+__version__ = '1.3.1'

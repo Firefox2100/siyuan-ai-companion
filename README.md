@@ -1,6 +1,16 @@
-# SiYuan AI Companion
+<div style="text-align: center;">
+  <a href="https://www.github.com/Firefox2100/siyuan-ai-companion">
+    <div style="display: inline-block; background: white; border-radius: 16px; padding: 8px;">
+      <img alt="SiYuan AI Companion logo" src="docs/assets/logo.svg" height="128">
+    </div>
+  </a>
+  <h1>SiYuan AI Companion</h1>
 
-[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=bugs)](https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=coverage)](https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion)
+<a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Bugs" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=bugs"></a>
+<a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Reliability Rating" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=reliability_rating"></a>
+<a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Security Rating" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=security_rating"></a>
+<a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Coverage" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=coverage"></a>
+</div>
 
 [中文简体](README_zh_CN.md)
 
