@@ -5,6 +5,7 @@ A functional class to transcribe audio files
 import os
 import datetime
 import asyncio
+from typing import BinaryIO
 from concurrent.futures import ProcessPoolExecutor
 from faster_whisper import WhisperModel
 from faster_whisper.transcribe import Segment
@@ -280,3 +281,21 @@ class Transcriber:
             )
 
             await siyuan.remove_from_processing(asset_path)
+
+    async def process_buffer(self,
+                             audio_buffer: BinaryIO,
+                             ):
+        """
+        Process an audio buffer and generate the response
+        :param audio_buffer: A binary buffer containing the audio data.
+            Could be a file content or any compatible buffer
+        :return: A generator that yields the transcribed text.
+        """
+        segments, _ = self.whisper_model.transcribe(
+            audio=audio_buffer,
+            language='en',
+        )
+
+        for segment in segments:
+            yield segment.text
+            await asyncio.sleep(0)

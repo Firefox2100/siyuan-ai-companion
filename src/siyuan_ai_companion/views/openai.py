@@ -2,11 +2,13 @@
 Blueprint definition for OpenAI compatible API endpoints.
 """
 
+import io
+import asyncio
 from urllib.parse import urljoin
-from quart import Blueprint, request, jsonify
+from quart import Blueprint, Response, request, jsonify, stream_with_context
 
-from siyuan_ai_companion.consts import APP_CONFIG
-from siyuan_ai_companion.model import RagDriver
+from siyuan_ai_companion.consts import APP_CONFIG, LOGGER
+from siyuan_ai_companion.model import RagDriver, Transcriber
 from .utils import token_required, forward_request
 
 
@@ -163,3 +165,50 @@ async def v1_retrieve():
     )
 
     return jsonify({'context': context})
+
+
+@openai_blueprint.route('/direct/v1/transcribe', methods=['POST'])
+@token_required
+async def v1_transcribe():
+    """
+    Receive an audio file, transcribe it and stream the result back.
+    """
+    request_files = await request.files
+
+    if 'file' not in request_files:
+        return jsonify({'error': 'No file part in the request'}), 400
+
+    file = request_files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    file_bytes = file.read()
+    audio_buffer = io.BytesIO(file_bytes)
+
+    transcriber = Transcriber()
+
+    @stream_with_context
+    async def streaming_response():
+        async_generator = transcriber.process_buffer(audio_buffer)
+
+        try:
+            while True:
+                try:
+                    text = await asyncio.wait_for(async_generator.__anext__(), timeout=60)
+                    yield text
+                except asyncio.TimeoutError:
+                    LOGGER.debug('Timeout while waiting for transcription chunk')
+                    break
+                except StopAsyncIteration:
+                    break
+        finally:
+            if hasattr(async_generator, 'aclose'):
+                await async_generator.aclose()
+
+    response = Response(
+        streaming_response(),
+        content_type='text/plain',
+    )
+    response.timeout = None     # Disable total timeout for the stream
+
+    return response
