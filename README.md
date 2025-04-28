@@ -10,11 +10,15 @@
 <a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Reliability Rating" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=reliability_rating"></a>
 <a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Security Rating" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=security_rating"></a>
 <a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Coverage" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=coverage"></a>
+<a href="https://github.com/Firefox2100/siyuan-ai-companion/actions/workflows/build-docker-image.yaml"><img alt="Docker Build Status" src="https://github.com/Firefox2100/siyuan-ai-companion/actions/workflows/build-docker-image.yaml/badge.svg"></a>
 </div>
 
 [中文简体](README_zh_CN.md)
 
 A companion service to use SiYuan note as a knowledge base with OpenAI APIs.
+
+![Login Page](docs/assets/login-screen.png)
+![Chat Page](docs/assets/chat-interface.png)
 
 ## License and disclaimer
 
@@ -74,15 +78,19 @@ If using docker, the image has been uploaded to Docker Hub, and can be used with
 ```yaml
 services:
   siyuan-ai-companion:
-    image: firefox2100/siyuan-ai-companion:latest
+    image: firefox2100/siyuan-ai-companion:testing
     restart: always
     container_name: siyuan-ai-companion
     environment:
-      - SIYUAN_URL=http://siyuan:6806
-      - SIYUAN_TOKEN=your-siyuan-token
-      - QDRANT_LOCATION=qdrant:6333
-      - QDRANT_COLLECTION_NAME=siyuan_ai_companion
-      - OPENAI_URL=https://api.openai.com/v1/
+      SIYUAN_URL: "http://siyuan:6806"
+      SIYUAN_TOKEN: "your-siyuan-token"
+      QDRANT_LOCATION: "http://qdrant:6333"
+      QDRANT_COLLECTION_NAME: "siyuan_ai_companion"
+      OPENAI_URL: "https://api.openai.com/v1/"
+      COMPANION_TOKEN: "your-companion-token"
+      HUGGINGFACE_HUB_TOKEN: "your-huggingface-token"
+      # CUDA_VISIBLE_DEVICES: "" # Leave empty to use CPU
+      # COMPANION_LOGGING_LEVEL: "INFO"
     ports:
       - "8000:8000"
 
