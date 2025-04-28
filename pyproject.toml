@@ -56,6 +56,9 @@ Issues = "https://github.com/Firefox2100/siyuan-ai-companion/issues"
 [tool.setuptools.dynamic]
 version = {attr = "siyuan_ai_companion.__version__"}
 
+[tool.setuptools.package-data]
+siyuan_ai_companion = ["data/*"]
+
 [tool.pylint.main]
 clear-cache-post-run = true
 exit-zero = true

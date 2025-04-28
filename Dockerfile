@@ -13,11 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV SIYUAN_URL="http://siyuan:6806"
-ENV QDRANT_LOCATION="qdrant:6333"
+ENV QDRANT_LOCATION="http://qdrant:6333"
 ENV QDRANT_COLLECTION_NAME="siyuan_ai_companion"
 ENV OPENAI_URL="https://api.openai.com/v1/"
 ENV HYPERCORN_HOST="0.0.0.0"
 ENV HYPERCORN_PORT=8000
+ENV HF_HOME="/app/cache/huggingface"
+ENV MPLCONFIGDIR="/app/cache/matplotlib"
 
 # Set the working directory and change ownership to the non-root user
 WORKDIR /app
@@ -28,6 +30,9 @@ COPY . /app/siyuan-ai-companion
 
 RUN python -m pip install --no-cache-dir /app/siyuan-ai-companion[hypercorn] \
   && chown -R appuser:appgroup /app
+
+# Use an anonymous volume to persist cache data
+VOLUME ["/app/cache"]
 
 # Switch to the non-root user
 USER appuser
