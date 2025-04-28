@@ -175,3 +175,5 @@ cython_debug/
 
 # Runtime cache
 last_update
+
+!src/siyuan_ai_companion/data/**
