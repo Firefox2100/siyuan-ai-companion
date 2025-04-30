@@ -1,10 +1,8 @@
-<div style="text-align: center;">
-  <a href="https://www.github.com/Firefox2100/siyuan-ai-companion">
-    <div style="display: inline-block; background: white; border-radius: 16px; padding: 8px;">
-      <img alt="SiYuan AI Companion logo" src="docs/assets/logo.svg" height="128">
-    </div>
-  </a>
-  <h1>SiYuan AI Companion</h1>
+<div align="center">
+<a href="https://www.github.com/Firefox2100/siyuan-ai-companion">
+<img src="docs/assets/logo-with-background.svg" alt="SiYuan AI Companion logo" height="144">
+</a>
+<h1>SiYuan AI Companion</h1>
 
 <a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Bugs" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=bugs"></a>
 <a href="https://sonarcloud.io/summary/new_code?id=Firefox2100_siyuan-ai-companion"><img alt="Reliability Rating" src="https://sonarcloud.io/api/project_badges/measure?project=Firefox2100_siyuan-ai-companion&metric=reliability_rating"></a>
@@ -44,11 +42,13 @@ Based on the considerations, it decided to:
 
 ## Features
 
+- [x] Bundling an UI to easily interact with the service
 - [x] Support for OpenAI API proxy
 - [x] Support for getting notes from SiYuan
 - [x] Support for querying note blocks via last updated time
 - [x] Support for embedding note blocks and store them in Qdrant
 - [x] Support for querying Qdrant for similar blocks, reconstruct the original note by querying SiYuan API, and generate prompt for OpenAI API
+- [x] Support for saving the chat session back into a notebook
 - [x] Support for listing all asset files in SiYuan server for integration
 - [x] Support for audio transcription and diarisation using local models. This is due to lack of good options for audio transcription and diarisation in self-hosted stacks.
 
@@ -65,7 +65,7 @@ If used in production, it's recommended to use a production-ready ASGI server, a
 ```bash
 export SIYUAN_URL="http://localhost:6806"
 export SIYUAN_TOKEN="your-siyuan-token"
-export QDRANT_LOCATION="localhost:6333"
+export QDRANT_LOCATION="http://localhost:6333"
 export QDRANT_COLLECTION_NAME="siyuan_ai_companion"
 export OPENAI_URL="https://api.openai.com/v1/"
 
@@ -103,10 +103,10 @@ services:
         target: /qdrant/config/production.yaml
     volumes:
       - ./qdrant_data:/qdrant/storage
-  
+
   siyuan:
     image: b3log/siyuan:latest
-    command: ['--workspace=/siyuan/workspace/', '--accessAuthCode=your-auth-code']
+    command: [ '--workspace=/siyuan/workspace/', '--accessAuthCode=your-auth-code' ]
     ports:
       - 6806:6806
     volumes:
@@ -164,9 +164,7 @@ The core feature of this service is to enable RAG on SiYuan notes. This does not
 
 This service will query SiYuan every 5 minutes to see if there's an update on the note content. Once found, it will use the updated content to regenerate the index and embeddings. This is done in the background, and will only generate for the updated (or newly created) blocks for minimal resource usage.
 
-Upon receiving a request at `/openai/v1/completions` or `/openai/v1/chat/completions`, it will embed the prompt and query the Qdrant index for similar blocks. It will then retrieve the **whole note** containing the top 5 relevant blocks. The top notes will be added to the prompt and send to OpenAI API.
-
-> **Note**: SiYuan stores and manages notes in the unit of `blocks`, which is the minimal unit of a passage content (e.g. a title, a paragraph, a list item, etc.). To allow partial updates, this service embeds and stores the data in blocks, and index them as blocks. As such, storage-time semantic chunking is not possible directly within Qdrant. The result is that the whole note must be retrieved and sent to the OpenAI API, which will waste some tokens. There are plans to introduce a separate database for storing the chunking information, mapping, and allowing the service to use chunked data for RAG.
+Upon receiving a request at `/openai/v1/completions` or `/openai/v1/chat/completions`, it will embed the prompt and query the Qdrant index for similar blocks. It will then retrieve the **whole note** containing the top 5 relevant blocks. It then segments the document based on the Markdown structure, and sends the most relevent segments to the LLM. Semantic segmentation is not yet implemented due to the heavy resource usage when segmenting the documents: processing a long passage may take minutes, if not hours, on a CPU-only setup.
 
 ### Transcribe audio files
 
